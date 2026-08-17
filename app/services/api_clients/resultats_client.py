@@ -272,12 +272,12 @@ class ResultatsApiClient:
     def get_mesa_results(self, codi_convocatoria: str, force_refresh: bool = False) -> list[dict[str, Any]]:
         """Detall de vots per candidatura, mesa a mesa.
 
-        Encara no s'usa en cap vista: el blueprint `mesa` (Resultats per
-        mesa electoral) mostra l'estat d'escrutini en viu de cada mesa
-        (OBERTA_MESA/COMUNICADA_MESA/...) via mesa_client.py, no el
-        desglossament per candidatura. Aquest mètode queda implementat i
-        provat per si en el futur cal afegir-hi, per exemple, un detall de
-        vots per partit dins la mateixa vista o com a apartat propi.
+        Usat pel blueprint `mesa` (Resultats per mesa electoral) per afegir,
+        a la taula d'estat d'escrutini, una columna de vots per cada partit
+        (vegeu blueprints/mesa/services.py::merge_partit_vots). `districte`/
+        `seccio`/`mesa` es retornen com a text — igual que a get_results() i
+        get_zones() — perquè aquell mòdul les pugui creuar amb les de
+        mesa_client.py sense sorpreses de tipus (int64 de pandas vs str).
         """
         df = self._get_dataframe(force_refresh=force_refresh)
         conv_df = df[df["CODI_CONVOCATORIA"] == codi_convocatoria]
@@ -294,16 +294,16 @@ class ResultatsApiClient:
         for _, mesa_row in mesas.iterrows():
             mesa_df = conv_df[conv_df["CODI_DISTRICTE_SECCIO_MESA"] == mesa_row["CODI_DISTRICTE_SECCIO_MESA"]]
             per_partit = (
-                mesa_df.groupby(["NOM_PARTIT", "SIGLAS_PARTIT", "COLOR_PARTIT"], dropna=False)["VOTS_PARTIT"]
+                mesa_df.groupby(["NOM_PARTIT", "SIGLAS_PARTIT", "CODI_PARTIT", "COLOR_PARTIT"], dropna=False)["VOTS_PARTIT"]
                 .sum()
                 .reset_index()
                 .sort_values("VOTS_PARTIT", ascending=False)
             )
             result.append({
                 "codi_mesa": mesa_row["CODI_DISTRICTE_SECCIO_MESA"],
-                "districte": mesa_row["DISTRICTE_MESA"],
-                "seccio": mesa_row["SECCIO_MESA"],
-                "mesa": mesa_row["MESA"],
+                "districte": str(mesa_row["DISTRICTE_MESA"]),
+                "seccio": str(mesa_row["SECCIO_MESA"]),
+                "mesa": str(mesa_row["MESA"]),
                 "cens_mesa": int(mesa_row["CENS_MESA"]),
                 "participants_mesa": int(mesa_row["AVAN3_MESA"]),
                 "nuls_mesa": int(mesa_row["NULS_VOTS_MESA"]),
@@ -312,6 +312,7 @@ class ResultatsApiClient:
                     {
                         "nom": r["NOM_PARTIT"],
                         "siglas": self._clean_text(r["SIGLAS_PARTIT"]),
+                        "codi": r["CODI_PARTIT"],
                         "color": self._clean_color(r["COLOR_PARTIT"]),
                         "vots": int(r["VOTS_PARTIT"]),
                     }

@@ -54,6 +54,35 @@ def meses_for_districte_seccio(rows: list[dict[str, Any]], districte: str, secci
     return seen
 
 
+def merge_partit_vots(
+    rows: list[dict[str, Any]],
+    mesa_results: list[dict[str, Any]],
+    partits: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Afegeix `vots_per_partit` (llista alineada amb `partits`) a cada fila.
+
+    `mesa_results` ve de ResultatsApiClient.get_mesa_results(): el
+    desglossament de vots per candidatura d'una font diferent (CSV de
+    partits, no el d'estat d'escrutini que ja porten `rows`), creuat per
+    (districte, secció, mesa). `partits` és la llista mestra de
+    candidatures de tota la convocatòria (mateix ordre que "Resultats
+    electorals"), perquè totes les meses mostrin les mateixes columnes de
+    partit encara que en alguna un partit concret tingui 0 vots — si
+    `mesa_results` no s'ha pogut carregar (font caiguda), totes surten a 0
+    en comptes de trencar la pàgina.
+    """
+    per_mesa = {
+        (m["districte"], m["seccio"], m["mesa"]): {c["codi"]: c["vots"] for c in m["candidatures"]}
+        for m in mesa_results
+    }
+    result = []
+    for r in rows:
+        vots_per_zona = per_mesa.get((r["districte"], r["seccio"], r["mesa"]), {})
+        vots_per_partit = [vots_per_zona.get(p["codi"], 0) for p in partits]
+        result.append({**r, "vots_per_partit": vots_per_partit})
+    return result
+
+
 def filter_by_zona(rows: list[dict[str, Any]], districte: str = "", seccio: str = "", mesa: str = "") -> list[dict[str, Any]]:
     result = rows
     if districte:
@@ -129,7 +158,8 @@ def build_export_meta(convocatories: list[dict[str, Any]], codi: str, args: Any)
     }
 
 
-def rows_to_csv(rows: list[dict[str, Any]], meta: dict[str, Any]) -> str:
+def rows_to_csv(rows: list[dict[str, Any]], meta: dict[str, Any], partits: list[dict[str, Any]] | None = None) -> str:
+    partits = partits or []
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(["Convocatòria", meta.get("nom", "")])
@@ -140,6 +170,7 @@ def rows_to_csv(rows: list[dict[str, Any]], meta: dict[str, Any]) -> str:
     writer.writerow([
         "Districte", "Secció", "Mesa", "Cens", "Oberta", "Comunicada", "Hora comunicada",
         "Avanç 1", "Avanç 2", "Avanç 3", "Vots a partits", "Nuls", "Blancs", "Total vots",
+        *[p["siglas"] or p["nom"] for p in partits],
     ])
     for r in rows:
         writer.writerow([
@@ -148,11 +179,12 @@ def rows_to_csv(rows: list[dict[str, Any]], meta: dict[str, Any]) -> str:
             r["hora_comunicada"] or "",
             r["avan1_mesa"], r["avan2_mesa"], r["avan3_mesa"],
             r["vots_partits_mesa"], r["nuls_mesa"], r["blancs_mesa"], r["totals_vots_mesa"],
+            *r.get("vots_per_partit", []),
         ])
     return buffer.getvalue()
 
 
-def rows_to_pdf(rows: list[dict[str, Any]], meta: dict[str, Any]) -> bytes:
+def rows_to_pdf(rows: list[dict[str, Any]], meta: dict[str, Any], partits: list[dict[str, Any]] | None = None) -> bytes:
     from xml.sax.saxutils import escape as xml_escape
 
     from reportlab.lib import colors as rl_colors
@@ -162,15 +194,28 @@ def rows_to_pdf(rows: list[dict[str, Any]], meta: dict[str, Any]) -> bytes:
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    # Landscape, no vertical (com resultats/services.py::results_to_pdf):
-    # aquesta taula té 14 columnes i no hi cap en orientació vertical sense
-    # que el text es comprimeixi il·legible.
+    partits = partits or []
+
+    # Amb totes les columnes de partit afegides, ni una taula apaïsada A4
+    # ni cap mida de lletra raonable hi fan cabre les ~14 columnes fixes +
+    # una per partit (una convocatòria pot tenir-ne més de 20): en comptes
+    # de comprimir-les fins a fer-les illegibles, la pàgina es fa tan
+    # ampla com calgui perquè cada columna mantingui una amplada llegible
+    # — l'alçada es queda igual que un A4 apaïsat perquè la paginació
+    # vertical (repeatRows) de les ~90 meses continuï funcionant igual.
+    core_widths_cm = [1.8, 1.8, 1.5, 2.1, 1.8, 2.2, 1.8, 1.6, 1.6, 1.6, 2.2, 1.7, 1.7, 2.1]
+    partit_width_cm = 1.6
+    margin_cm = 1.2
+    content_width_cm = sum(core_widths_cm) + len(partits) * partit_width_cm
+    page_width = (content_width_cm + 2 * margin_cm) * cm
+    page_height = landscape(A4)[1]
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
-        pagesize=landscape(A4),
+        pagesize=(page_width, page_height),
         title=f"Resultats per mesa — {meta.get('nom', '')}",
-        leftMargin=1.2 * cm, rightMargin=1.2 * cm, topMargin=1.2 * cm, bottomMargin=1.2 * cm,
+        leftMargin=margin_cm * cm, rightMargin=margin_cm * cm, topMargin=margin_cm * cm, bottomMargin=margin_cm * cm,
     )
     styles = getSampleStyleSheet()
     header_style = ParagraphStyle(
@@ -187,8 +232,11 @@ def rows_to_pdf(rows: list[dict[str, Any]], meta: dict[str, Any]) -> bytes:
         story.append(Paragraph(xml_escape(meta["zona"]), styles["Normal"]))
     story.append(Spacer(1, 0.4 * cm))
 
-    headers = ["Districte", "Secció", "Mesa", "Cens", "Oberta", "Comunicada", "Hora", "Av.1", "Av.2", "Av.3", "Partits", "Nuls", "Blancs", "Total"]
-    data = [[Paragraph(h, header_style) for h in headers]]
+    headers = (
+        ["Districte", "Secció", "Mesa", "Cens", "Oberta", "Comunicada", "Hora", "Av.1", "Av.2", "Av.3", "Partits", "Nuls", "Blancs", "Total"]
+        + [p["siglas"] or p["nom"] for p in partits]
+    )
+    data = [[Paragraph(xml_escape(h), header_style) for h in headers]]
     for r in rows:
         data.append([
             Paragraph(str(r["districte"]), cell_style),
@@ -205,12 +253,10 @@ def rows_to_pdf(rows: list[dict[str, Any]], meta: dict[str, Any]) -> bytes:
             Paragraph("{:,}".format(r["nuls_mesa"]).replace(",", "."), cell_style),
             Paragraph("{:,}".format(r["blancs_mesa"]).replace(",", "."), cell_style),
             Paragraph("{:,}".format(r["totals_vots_mesa"]).replace(",", "."), cell_style),
+            *[Paragraph("{:,}".format(v).replace(",", "."), cell_style) for v in r.get("vots_per_partit", [])],
         ])
 
-    col_widths = [
-        1.8 * cm, 1.8 * cm, 1.5 * cm, 2.1 * cm, 1.8 * cm, 2.2 * cm, 1.8 * cm,
-        1.6 * cm, 1.6 * cm, 1.6 * cm, 2.2 * cm, 1.7 * cm, 1.7 * cm, 2.1 * cm,
-    ]
+    col_widths = [w * cm for w in core_widths_cm] + [partit_width_cm * cm] * len(partits)
     table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#da291c")),

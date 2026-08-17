@@ -150,18 +150,21 @@
     <p id="mesa-row-count" class="text-muted" aria-live="polite"></p>
   </div>
 
-  <div class="mesa-table-wrap">
+  <div class="mesa-table-scroll-top" id="mesa-table-scroll-top" aria-hidden="true" tabindex="-1">
+    <div class="mesa-table-scroll-top__inner" id="mesa-table-scroll-top-inner"></div>
+  </div>
+  <div class="mesa-table-wrap" id="mesa-table-wrap">
     <table class="results-table mesa-table" id="mesa-table">
       <caption class="sr-only">Estat d'escrutini per mesa de {{ selected_tipus }}</caption>
       <thead>
         <tr>
-          <th scope="col" data-sort-key="districte" data-sort-type="number" aria-sort="ascending" tabindex="0" role="button">
+          <th scope="col" class="mesa-table__sticky-col mesa-table__sticky-col--1" data-sort-key="districte" data-sort-type="number" aria-sort="ascending" tabindex="0" role="button">
             Districte <span class="sort-indicator" aria-hidden="true">▲</span>
           </th>
-          <th scope="col" data-sort-key="seccio" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+          <th scope="col" class="mesa-table__sticky-col mesa-table__sticky-col--2" data-sort-key="seccio" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
             Secció <span class="sort-indicator" aria-hidden="true"></span>
           </th>
-          <th scope="col" data-sort-key="mesa" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
+          <th scope="col" class="mesa-table__sticky-col mesa-table__sticky-col--3" data-sort-key="mesa" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
             Mesa <span class="sort-indicator" aria-hidden="true"></span>
           </th>
           <th scope="col" data-sort-key="cens" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
@@ -197,6 +200,13 @@
           <th scope="col" data-sort-key="totalVots" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
             Total vots <span class="sort-indicator" aria-hidden="true"></span>
           </th>
+          {% for p in partits %}
+          <th scope="col" class="mesa-table__partit-col{{ ' mesa-table__partit-col--first' if loop.first }}"
+              data-sort-key="partit{{ loop.index0 }}" data-sort-type="number"
+              aria-sort="none" tabindex="0" role="button">
+            <abbr title="{{ p.nom }}">{{ p.siglas or p.nom }}</abbr> <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          {% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -206,10 +216,11 @@
             data-comunicada="{{ 1 if m.comunicada else 0 }}" data-hora-comunicada="{{ m.hora_comunicada or '' }}"
             data-avan1="{{ m.avan1_mesa }}" data-avan2="{{ m.avan2_mesa }}" data-avan3="{{ m.avan3_mesa }}"
             data-vots-partits="{{ m.vots_partits_mesa }}" data-nuls="{{ m.nuls_mesa }}"
-            data-blancs="{{ m.blancs_mesa }}" data-total-vots="{{ m.totals_vots_mesa }}">
-          <td>{{ m.districte }}</td>
-          <td>{{ m.seccio }}</td>
-          <td>{{ m.mesa }}</td>
+            data-blancs="{{ m.blancs_mesa }}" data-total-vots="{{ m.totals_vots_mesa }}"
+            {% for v in m.vots_per_partit %}data-partit{{ loop.index0 }}="{{ v }}" {% endfor %}>
+          <td class="mesa-table__sticky-col mesa-table__sticky-col--1">{{ m.districte }}</td>
+          <td class="mesa-table__sticky-col mesa-table__sticky-col--2">{{ m.seccio }}</td>
+          <td class="mesa-table__sticky-col mesa-table__sticky-col--3">{{ m.mesa }}</td>
           <td>{{ "{:,}".format(m.cens_mesa).replace(",", ".") }}</td>
           <td class="mesa-table__live-col">
             <span class="mesa-badge {{ 'mesa-badge--active' if m.oberta else 'mesa-badge--muted' }}">{{ "Sí" if m.oberta else "No" }}</span>
@@ -225,6 +236,9 @@
           <td>{{ "{:,}".format(m.nuls_mesa).replace(",", ".") }}</td>
           <td>{{ "{:,}".format(m.blancs_mesa).replace(",", ".") }}</td>
           <td>{{ "{:,}".format(m.totals_vots_mesa).replace(",", ".") }}</td>
+          {% for v in m.vots_per_partit %}
+          <td class="mesa-table__partit-col{{ ' mesa-table__partit-col--first' if loop.first }}">{{ "{:,}".format(v).replace(",", ".") }}</td>
+          {% endfor %}
         </tr>
         {% endfor %}
       </tbody>

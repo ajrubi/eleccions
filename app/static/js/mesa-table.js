@@ -105,5 +105,43 @@
 
     updateHeaderIndicators();
     applyFilter();
+
+    // Barra de desplaçament "mirall" a sobre de la taula (vegeu style.css
+    // ::.mesa-table-scroll-top): amb tantes columnes de partit cal fer
+    // scroll horitzontal i la barra nativa, sota la taula, pot quedar fora
+    // de vista. `topScroll` no té contingut real: només se li dona la
+    // mateixa amplada que `wrap` perquè la seva barra reflecteixi el
+    // recorregut real, i cada banda actualitza l'scrollLeft de l'altra.
+    var wrap = document.getElementById("mesa-table-wrap");
+    var topScroll = document.getElementById("mesa-table-scroll-top");
+    var topInner = document.getElementById("mesa-table-scroll-top-inner");
+
+    if (wrap && topScroll && topInner) {
+      var syncingScroll = false;
+
+      function syncTopWidth() {
+        topInner.style.width = wrap.scrollWidth + "px";
+      }
+
+      function mirror(source, target) {
+        return function () {
+          if (syncingScroll) {
+            return;
+          }
+          syncingScroll = true;
+          target.scrollLeft = source.scrollLeft;
+          syncingScroll = false;
+        };
+      }
+
+      syncTopWidth();
+      window.addEventListener("resize", syncTopWidth);
+      if (window.ResizeObserver) {
+        new ResizeObserver(syncTopWidth).observe(table);
+      }
+
+      topScroll.addEventListener("scroll", mirror(topScroll, wrap));
+      wrap.addEventListener("scroll", mirror(wrap, topScroll));
+    }
   });
 })();

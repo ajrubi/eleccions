@@ -860,6 +860,26 @@ a { color: var(--color-red-dark); }
 }
 .mesa-table-wrap { overflow-x: auto; }
 
+/* Barra de desplaçament "mirall" a sobre de la taula: amb tantes columnes
+   de partit la taula fa scroll horitzontal, però la barra nativa només
+   apareix sota seu — invisible fins que l'usuari ja ha baixat més enllà de
+   la taula. Aquesta franja prima, sincronitzada per JS (mesa-table.js) amb
+   el scroll real de `.mesa-table-wrap`, li dona un punt de scroll sempre
+   visible just on comença la taula. `.mesa-table-scroll-top__inner` no té
+   contingut: només s'hi posa per JS la mateixa amplada que la taula
+   perquè la barra tingui la mida (i el "recorregut") correctes.
+   `pointer-events` es desactiva a mòbil perquè s'hi fa scroll amb el dit
+   directament sobre la taula, no cal la barra. */
+.mesa-table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 1.1rem;
+}
+.mesa-table-scroll-top__inner { height: 1px; }
+@media (pointer: coarse) {
+  .mesa-table-scroll-top { display: none; }
+}
+
 .mesa-table th[data-sort-key] {
   cursor: pointer;
   user-select: none;
@@ -877,6 +897,30 @@ a { color: var(--color-red-dark); }
 .mesa-table thead .mesa-table__live-col {
   background: var(--color-red-light);
 }
+/* Columnes de vots per partit: agrupades visualment amb una vora a
+   l'esquerra de la primera, ja que sempre s'afegeixen després de les
+   columnes fixes d'estat/recompte de la mesa. */
+.mesa-table__partit-col--first { border-left: 2px solid var(--color-border); }
+.mesa-table th.mesa-table__partit-col abbr { text-decoration: none; border-bottom: 1px dotted var(--color-text-muted); cursor: help; }
+
+/* Districte/Secció/Mesa congelades: amb totes les columnes de partit la
+   taula és més ampla que el contenidor (overflow-x: auto), i sense això
+   calia fer scroll fins perdre de vista a quina mesa correspon cada fila.
+   Cal un fons opac (el mateix blanc del panell) perquè les columnes que
+   passen per sota en fer scroll no s'hi transparentin. */
+.mesa-table__sticky-col {
+  position: sticky;
+  background: var(--color-white);
+  z-index: 1;
+}
+.mesa-table__sticky-col--1 { left: 0; width: 5.5rem; }
+.mesa-table__sticky-col--2 { left: 5.5rem; width: 5rem; }
+.mesa-table__sticky-col--3 {
+  left: 10.5rem;
+  width: 4.5rem;
+  box-shadow: 2px 0 4px rgba(30, 0, 8, 0.15);
+}
+.mesa-table thead .mesa-table__sticky-col { z-index: 2; }
 .mesa-table__hora {
   font-family: "Consolas", "Courier New", monospace;
   font-weight: 700;
