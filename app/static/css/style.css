@@ -844,20 +844,6 @@ a { color: var(--color-red-dark); }
   padding: 1.25rem;
   box-shadow: var(--shadow);
 }
-.mesa-table-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: .9rem;
-}
-.mesa-search-input {
-  flex: 1 1 280px;
-  padding: .55rem .75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: .95rem;
-}
 .mesa-table-wrap { overflow-x: auto; }
 
 /* Barra de desplaçament "mirall" a sobre de la taula: amb tantes columnes
@@ -906,20 +892,21 @@ a { color: var(--color-red-dark); }
 /* Districte/Secció/Mesa congelades: amb totes les columnes de partit la
    taula és més ampla que el contenidor (overflow-x: auto), i sense això
    calia fer scroll fins perdre de vista a quina mesa correspon cada fila.
-   Cal un fons opac (el mateix blanc del panell) perquè les columnes que
-   passen per sota en fer scroll no s'hi transparentin. */
+   `left` NO es fixa aquí en rem: la taula és `table-layout: auto`, així
+   que l'amplada real de cada columna depèn del contingut i pot no
+   coincidir amb qualsevol valor fix que hi posem — per això mesa-table.js
+   la mesura en temps real i escriu `left` inline per columna (vegeu
+   updateStickyOffsets()); sense això les columnes es desalineaven amb el
+   scroll i s'hi veia contingut d'altres columnes a través seu. El fons
+   opac i tenu (a joc amb `--color-bg`, no blanc pur) les distingeix de la
+   resta de columnes, que sí que es mouen amb el scroll. */
 .mesa-table__sticky-col {
   position: sticky;
-  background: var(--color-white);
+  left: 0;
+  background: var(--color-bg);
   z-index: 1;
 }
-.mesa-table__sticky-col--1 { left: 0; width: 5.5rem; }
-.mesa-table__sticky-col--2 { left: 5.5rem; width: 5rem; }
-.mesa-table__sticky-col--3 {
-  left: 10.5rem;
-  width: 4.5rem;
-  box-shadow: 2px 0 4px rgba(30, 0, 8, 0.15);
-}
+.mesa-table__sticky-col--last { box-shadow: 2px 0 4px rgba(30, 0, 8, 0.15); }
 .mesa-table thead .mesa-table__sticky-col { z-index: 2; }
 .mesa-table__hora {
   font-family: "Consolas", "Courier New", monospace;

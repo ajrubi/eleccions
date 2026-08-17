@@ -143,13 +143,6 @@
 {% else %}
 
 <section class="mesa-table-panel">
-  <div class="mesa-table-toolbar">
-    <label for="mesa-search" class="sr-only">Cerca per districte, secció, mesa o estat</label>
-    <input type="search" id="mesa-search" class="mesa-search-input"
-           placeholder="🔍 Cerca per districte, secció, mesa…" autocomplete="off">
-    <p id="mesa-row-count" class="text-muted" aria-live="polite"></p>
-  </div>
-
   <div class="mesa-table-scroll-top" id="mesa-table-scroll-top" aria-hidden="true" tabindex="-1">
     <div class="mesa-table-scroll-top__inner" id="mesa-table-scroll-top-inner"></div>
   </div>
@@ -158,13 +151,13 @@
       <caption class="sr-only">Estat d'escrutini per mesa de {{ selected_tipus }}</caption>
       <thead>
         <tr>
-          <th scope="col" class="mesa-table__sticky-col mesa-table__sticky-col--1" data-sort-key="districte" data-sort-type="number" aria-sort="ascending" tabindex="0" role="button">
+          <th scope="col" class="mesa-table__sticky-col" data-sticky-index="0" data-sort-key="districte" data-sort-type="number" aria-sort="ascending" tabindex="0" role="button">
             Districte <span class="sort-indicator" aria-hidden="true">▲</span>
           </th>
-          <th scope="col" class="mesa-table__sticky-col mesa-table__sticky-col--2" data-sort-key="seccio" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+          <th scope="col" class="mesa-table__sticky-col" data-sticky-index="1" data-sort-key="seccio" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
             Secció <span class="sort-indicator" aria-hidden="true"></span>
           </th>
-          <th scope="col" class="mesa-table__sticky-col mesa-table__sticky-col--3" data-sort-key="mesa" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
+          <th scope="col" class="mesa-table__sticky-col mesa-table__sticky-col--last" data-sticky-index="2" data-sort-key="mesa" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
             Mesa <span class="sort-indicator" aria-hidden="true"></span>
           </th>
           <th scope="col" data-sort-key="cens" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
@@ -218,9 +211,9 @@
             data-vots-partits="{{ m.vots_partits_mesa }}" data-nuls="{{ m.nuls_mesa }}"
             data-blancs="{{ m.blancs_mesa }}" data-total-vots="{{ m.totals_vots_mesa }}"
             {% for v in m.vots_per_partit %}data-partit{{ loop.index0 }}="{{ v }}" {% endfor %}>
-          <td class="mesa-table__sticky-col mesa-table__sticky-col--1">{{ m.districte }}</td>
-          <td class="mesa-table__sticky-col mesa-table__sticky-col--2">{{ m.seccio }}</td>
-          <td class="mesa-table__sticky-col mesa-table__sticky-col--3">{{ m.mesa }}</td>
+          <td class="mesa-table__sticky-col" data-sticky-index="0">{{ m.districte }}</td>
+          <td class="mesa-table__sticky-col" data-sticky-index="1">{{ m.seccio }}</td>
+          <td class="mesa-table__sticky-col mesa-table__sticky-col--last" data-sticky-index="2">{{ m.mesa }}</td>
           <td>{{ "{:,}".format(m.cens_mesa).replace(",", ".") }}</td>
           <td class="mesa-table__live-col">
             <span class="mesa-badge {{ 'mesa-badge--active' if m.oberta else 'mesa-badge--muted' }}">{{ "Sí" if m.oberta else "No" }}</span>

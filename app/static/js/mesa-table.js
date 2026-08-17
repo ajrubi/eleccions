@@ -1,7 +1,7 @@
-// Client-side search + column sorting for "Resultats per mesa electoral",
-// same approach as cens-table.js: a convocatòria has at most a couple
-// hundred mesa rows, small enough to filter/sort directly in the DOM
-// without a page reload.
+// Client-side column sorting for "Resultats per mesa electoral", same
+// approach as cens-table.js: a convocatòria has at most a couple hundred
+// mesa rows, small enough to sort directly in the DOM without a page
+// reload.
 (function () {
   "use strict";
 
@@ -12,34 +12,9 @@
     }
 
     var tbody = table.querySelector("tbody");
-    var searchInput = document.getElementById("mesa-search");
-    var rowCountEl = document.getElementById("mesa-row-count");
     var headers = table.querySelectorAll("thead th[data-sort-key]");
 
     var currentSort = { key: "districte", direction: "asc" };
-
-    function stripAccents(text) {
-      return text.normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "");
-    }
-
-    function applyFilter() {
-      var term = stripAccents((searchInput ? searchInput.value : "").trim().toLowerCase());
-      var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
-      var visibleCount = 0;
-
-      rows.forEach(function (row) {
-        var haystack = stripAccents(row.textContent.toLowerCase());
-        var matches = term === "" || haystack.indexOf(term) !== -1;
-        row.hidden = !matches;
-        if (matches) {
-          visibleCount += 1;
-        }
-      });
-
-      if (rowCountEl) {
-        rowCountEl.textContent = visibleCount + " de " + rows.length + " meses";
-      }
-    }
 
     function compareRows(a, b, key, type) {
       var va = a.dataset[key] || "";
@@ -86,7 +61,6 @@
       }
       sortBy(key, type, currentSort.direction);
       updateHeaderIndicators();
-      applyFilter();
     }
 
     headers.forEach(function (th) {
@@ -99,12 +73,38 @@
       });
     });
 
-    if (searchInput) {
-      searchInput.addEventListener("input", applyFilter);
-    }
-
     updateHeaderIndicators();
-    applyFilter();
+
+    // Districte/Secció/Mesa congelades (position: sticky) necessiten un
+    // `left` per columna que coincideixi amb l'amplada REAL renderitzada
+    // de les columnes anteriors — i com que la taula és `table-layout:
+    // auto`, aquesta amplada depèn del contingut i no es pot fixar per
+    // endavant en CSS. Si `left` no encaixa exactament, la columna
+    // congelada deixa un escletxa pel mig i s'hi veu contingut d'altres
+    // columnes en fer scroll. Es mesura amb `getBoundingClientRect()`
+    // sobre la capçalera (totes les cel·les d'una columna comparteixen
+    // amplada en table-layout: auto) i s'aplica com a `left` inline a
+    // capçalera i cos.
+    function updateStickyOffsets() {
+      var stickyCells = table.querySelectorAll(".mesa-table__sticky-col");
+      var headerWidths = [];
+      stickyCells.forEach(function (cell) {
+        var index = parseInt(cell.dataset.stickyIndex, 10);
+        if (cell.tagName === "TH") {
+          headerWidths[index] = cell.getBoundingClientRect().width;
+        }
+      });
+      var lefts = [];
+      var acc = 0;
+      headerWidths.forEach(function (width, index) {
+        lefts[index] = acc;
+        acc += width;
+      });
+      stickyCells.forEach(function (cell) {
+        var index = parseInt(cell.dataset.stickyIndex, 10);
+        cell.style.left = lefts[index] + "px";
+      });
+    }
 
     // Barra de desplaçament "mirall" a sobre de la taula (vegeu style.css
     // ::.mesa-table-scroll-top): amb tantes columnes de partit cal fer
@@ -119,8 +119,9 @@
     if (wrap && topScroll && topInner) {
       var syncingScroll = false;
 
-      function syncTopWidth() {
+      function syncLayout() {
         topInner.style.width = wrap.scrollWidth + "px";
+        updateStickyOffsets();
       }
 
       function mirror(source, target) {
@@ -134,14 +135,16 @@
         };
       }
 
-      syncTopWidth();
-      window.addEventListener("resize", syncTopWidth);
+      syncLayout();
+      window.addEventListener("resize", syncLayout);
       if (window.ResizeObserver) {
-        new ResizeObserver(syncTopWidth).observe(table);
+        new ResizeObserver(syncLayout).observe(table);
       }
 
       topScroll.addEventListener("scroll", mirror(topScroll, wrap));
       wrap.addEventListener("scroll", mirror(wrap, topScroll));
+    } else {
+      updateStickyOffsets();
     }
   });
 })();
