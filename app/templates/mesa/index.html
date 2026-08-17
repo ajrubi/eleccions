@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Resultats per mesa electoral{% endblock %}
+{% block content %}
+
+<section class="filters" aria-label="Filtres de convocatòria i estat de mesa">
+  <form method="get" action="{{ url_for('mesa.index') }}" class="filters__form">
+    <div class="filters__field">
+      <label for="tipus">Tipus d'elecció</label>
+      <select id="tipus" name="tipus" data-autosubmit>
+        {% for t in tipus_list %}
+        <option value="{{ t }}" {% if t == selected_tipus %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__field filters__field--wide">
+      <label for="codi">Convocatòria electoral</label>
+      <select id="codi" name="codi" data-autosubmit>
+        {% for c in filtered %}
+        <option value="{{ c.codi }}" {% if c.codi == selected_codi %}selected{% endif %}>{{ c.nom }} · {{ c.data }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__zone-group">
+      <div class="filters__field">
+        <label for="districte">Districte</label>
+        <select id="districte" name="districte" data-autosubmit>
+          <option value="">Tots els districtes</option>
+          {% for d in districtes %}
+          <option value="{{ d }}" {% if d == selected_districte %}selected{% endif %}>Districte {{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filters__field">
+        <label for="seccio">Secció</label>
+        <select id="seccio" name="seccio" data-autosubmit {% if not seccions %}disabled{% endif %}>
+          <option value="">Totes les seccions</option>
+          {% for s in seccions %}
+          <option value="{{ s }}" {% if s == selected_seccio %}selected{% endif %}>Secció {{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filters__field filters__field--narrow">
+        <label for="mesa">Mesa electoral</label>
+        <select id="mesa" name="mesa" data-autosubmit {% if not meses %}disabled{% endif %}>
+          <option value="">Totes les meses</option>
+          {% for m in meses %}
+          <option value="{{ m }}" {% if m == selected_mesa %}selected{% endif %}>Mesa {{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="filters__zone-group">
+      <div class="filters__field">
+        <label for="oberta">Mesa oberta</label>
+        <select id="oberta" name="oberta" data-autosubmit>
+          <option value="" {% if selected_oberta == "" %}selected{% endif %}>Totes</option>
+          <option value="SI" {% if selected_oberta == "SI" %}selected{% endif %}>Sí</option>
+          <option value="NO" {% if selected_oberta == "NO" %}selected{% endif %}>No</option>
+        </select>
+      </div>
+      <div class="filters__field">
+        <label for="comunicada">Mesa comunicada</label>
+        <select id="comunicada" name="comunicada" data-autosubmit>
+          <option value="" {% if selected_comunicada == "" %}selected{% endif %}>Totes</option>
+          <option value="SI" {% if selected_comunicada == "SI" %}selected{% endif %}>Sí (escrutada)</option>
+          <option value="NO" {% if selected_comunicada == "NO" %}selected{% endif %}>No (pendent)</option>
+        </select>
+      </div>
+    </div>
+    <noscript>
+      <button type="submit" class="btn btn--primary">Filtrar</button>
+    </noscript>
+  </form>
+</section>
+
+{% if error %}
+<div class="state-panel state-panel--error" role="alert">
+  <p class="state-panel__title">No s'han pogut carregar les dades d'escrutini.</p>
+  <p class="state-panel__detail">{{ error }}</p>
+  <a class="btn btn--primary"
+     href="{{ url_for('mesa.index', tipus=selected_tipus, codi=selected_codi, districte=selected_districte, seccio=selected_seccio, mesa=selected_mesa, oberta=selected_oberta, comunicada=selected_comunicada, refresh=1) }}">
+    Torna-ho a provar
+  </a>
+</div>
+
+{% elif empty %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Encara no hi ha convocatòries disponibles.</p>
+</div>
+
+{% else %}
+<section class="results-header">
+  <div>
+    <h1>Resultats per mesa electoral</h1>
+    <p class="results-header__subtitle">{{ selected_tipus }} · estat d'escrutini en viu, mesa a mesa</p>
+  </div>
+  <div class="results-header__actions">
+    <a class="btn btn--outline" href="{{ url_for('mesa.index', tipus=selected_tipus, codi=selected_codi, districte=selected_districte, seccio=selected_seccio, mesa=selected_mesa, oberta=selected_oberta, comunicada=selected_comunicada, refresh=1) }}">↻ Actualitza ara</a>
+    <a class="btn btn--outline" href="{{ url_for('mesa.exporta_csv', codi=selected_codi, districte=selected_districte, seccio=selected_seccio, mesa=selected_mesa, oberta=selected_oberta, comunicada=selected_comunicada) }}">📄 CSV</a>
+    <a class="btn btn--outline" href="{{ url_for('mesa.exporta_pdf', codi=selected_codi, districte=selected_districte, seccio=selected_seccio, mesa=selected_mesa, oberta=selected_oberta, comunicada=selected_comunicada) }}">⬇ PDF</a>
+  </div>
+</section>
+
+<p class="info-note">
+  "Oberta", "Comunicada" i "Hora comunicada" reflecteixen l'estat de l'escrutini en el moment de la consulta i
+  poden canviar mentre continua la nit electoral — torna a carregar la pàgina (o prem "Actualitza ara") per
+  veure'n l'evolució. Una mesa "Comunicada" ja s'ha escrutinat; la resta queda pendent. El <strong>% d'escrutini</strong>
+  oficial (targetes de sota) es calcula, com fan el Ministeri de l'Interior i la Junta Electoral Central, com a
+  meses comunicades sobre el total — els vots no hi alteren res.
+</p>
+
+{% if not summary or summary.total == 0 %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Aquesta convocatòria no té meses disponibles.</p>
+</div>
+{% else %}
+
+<section class="cards" aria-label="Resum de l'escrutini">
+  <article class="card">
+    <h2 class="card__label">Meses totals</h2>
+    <p class="card__value">{{ summary.total }}</p>
+  </article>
+  <article class="card card--accent">
+    <h2 class="card__label">Meses obertes</h2>
+    <p class="card__value">{{ summary.obertes }}</p>
+  </article>
+  <article class="card card--ok">
+    <h2 class="card__label">Escrutades (comunicades)</h2>
+    <p class="card__value">{{ summary.comunicades }}</p>
+    <p class="card__meta">{{ (summary.pct_escrutades ~ "%") if summary.pct_escrutades is not none else "N/D" }} de les meses</p>
+  </article>
+  <article class="card card--pending">
+    <h2 class="card__label">Pendents</h2>
+    <p class="card__value">{{ summary.pendents }}</p>
+    <p class="card__meta">{{ (summary.pct_pendents ~ "%") if summary.pct_pendents is not none else "N/D" }} de les meses</p>
+  </article>
+</section>
+
+{% if not mesa_rows %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Cap mesa coincideix amb els filtres seleccionats.</p>
+</div>
+{% else %}
+
+<section class="mesa-table-panel">
+  <div class="mesa-table-toolbar">
+    <label for="mesa-search" class="sr-only">Cerca per districte, secció, mesa o estat</label>
+    <input type="search" id="mesa-search" class="mesa-search-input"
+           placeholder="🔍 Cerca per districte, secció, mesa…" autocomplete="off">
+    <p id="mesa-row-count" class="text-muted" aria-live="polite"></p>
+  </div>
+
+  <div class="mesa-table-wrap">
+    <table class="results-table mesa-table" id="mesa-table">
+      <caption class="sr-only">Estat d'escrutini per mesa de {{ selected_tipus }}</caption>
+      <thead>
+        <tr>
+          <th scope="col" data-sort-key="districte" data-sort-type="number" aria-sort="ascending" tabindex="0" role="button">
+            Districte <span class="sort-indicator" aria-hidden="true">▲</span>
+          </th>
+          <th scope="col" data-sort-key="seccio" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Secció <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="mesa" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
+            Mesa <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="cens" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Cens <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" class="mesa-table__live-col" data-sort-key="oberta" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Oberta <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" class="mesa-table__live-col" data-sort-key="comunicada" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Comunicada <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" class="mesa-table__live-col" data-sort-key="horaComunicada" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
+            Hora comunicada <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="avan1" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Avanç 1 <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="avan2" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Avanç 2 <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="avan3" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Avanç 3 <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="votsPartits" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Vots a partits <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="nuls" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Nuls <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="blancs" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Blancs <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="totalVots" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Total vots <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in mesa_rows %}
+        <tr data-districte="{{ m.districte }}" data-seccio="{{ m.seccio }}" data-mesa="{{ m.mesa }}"
+            data-cens="{{ m.cens_mesa }}" data-oberta="{{ 1 if m.oberta else 0 }}"
+            data-comunicada="{{ 1 if m.comunicada else 0 }}" data-hora-comunicada="{{ m.hora_comunicada or '' }}"
+            data-avan1="{{ m.avan1_mesa }}" data-avan2="{{ m.avan2_mesa }}" data-avan3="{{ m.avan3_mesa }}"
+            data-vots-partits="{{ m.vots_partits_mesa }}" data-nuls="{{ m.nuls_mesa }}"
+            data-blancs="{{ m.blancs_mesa }}" data-total-vots="{{ m.totals_vots_mesa }}">
+          <td>{{ m.districte }}</td>
+          <td>{{ m.seccio }}</td>
+          <td>{{ m.mesa }}</td>
+          <td>{{ "{:,}".format(m.cens_mesa).replace(",", ".") }}</td>
+          <td class="mesa-table__live-col">
+            <span class="mesa-badge {{ 'mesa-badge--active' if m.oberta else 'mesa-badge--muted' }}">{{ "Sí" if m.oberta else "No" }}</span>
+          </td>
+          <td class="mesa-table__live-col">
+            <span class="mesa-badge {{ 'mesa-badge--ok' if m.comunicada else 'mesa-badge--pending' }}">{{ "Escrutada" if m.comunicada else "Pendent" }}</span>
+          </td>
+          <td class="mesa-table__live-col mesa-table__hora">{{ m.hora_comunicada or "—" }}</td>
+          <td>{{ "{:,}".format(m.avan1_mesa).replace(",", ".") }}</td>
+          <td>{{ "{:,}".format(m.avan2_mesa).replace(",", ".") }}</td>
+          <td>{{ "{:,}".format(m.avan3_mesa).replace(",", ".") }}</td>
+          <td>{{ "{:,}".format(m.vots_partits_mesa).replace(",", ".") }}</td>
+          <td>{{ "{:,}".format(m.nuls_mesa).replace(",", ".") }}</td>
+          <td>{{ "{:,}".format(m.blancs_mesa).replace(",", ".") }}</td>
+          <td>{{ "{:,}".format(m.totals_vots_mesa).replace(",", ".") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/mesa-table.js') }}"></script>
+{% endblock %}

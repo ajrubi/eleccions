@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Cens electoral{% endblock %}
+{% block content %}
+
+<section class="filters" aria-label="Filtre de convocatòria">
+  <form method="get" action="{{ url_for('cens.index') }}" class="filters__form">
+    <div class="filters__field">
+      <label for="convocatoria">Convocatòria electoral</label>
+      <select id="convocatoria" name="convocatoria" data-autosubmit>
+        {% for c in convocatories %}
+        <option value="{{ c.nom }}" {% if c.nom == selected_nom %}selected{% endif %}>{{ c.nom }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <noscript>
+      <button type="submit" class="btn btn--primary">Filtrar</button>
+    </noscript>
+  </form>
+</section>
+
+{% if error %}
+<div class="state-panel state-panel--error" role="alert">
+  <p class="state-panel__title">No s'han pogut carregar les dades del cens.</p>
+  <p class="state-panel__detail">{{ error }}</p>
+  <a class="btn btn--primary" href="{{ url_for('cens.index', convocatoria=selected_nom, refresh=1) }}">Torna-ho a provar</a>
+</div>
+
+{% elif empty %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Encara no hi ha convocatòries disponibles al cens.</p>
+</div>
+
+{% else %}
+<section class="results-header">
+  <div>
+    <h1>Cens electoral per mesa</h1>
+    <p class="results-header__subtitle">{{ selected_nom }}</p>
+  </div>
+</section>
+
+<p class="info-note">
+  Aquesta vista mostra el cens agregat per mesa, a partir de dades anonimitzades (sense DNI ni cap altre
+  identificador personal). La cerca d'un elector individual per DNI serà un apartat futur diferent, encara
+  no disponible.
+</p>
+
+{% if not mesa_rows %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Aquesta convocatòria no té dades de cens disponibles.</p>
+</div>
+{% else %}
+
+<section class="cards cards--single" aria-label="Resum del cens">
+  <article class="card card--accent">
+    <h2 class="card__label">Total cens electoral</h2>
+    <p class="card__value">{{ "{:,}".format(total).replace(",", ".") }}</p>
+    <p class="card__meta">{{ mesa_rows|length }} meses censades</p>
+  </article>
+</section>
+
+<section class="cens-table-panel">
+  <div class="cens-table-toolbar">
+    <label for="cens-search" class="sr-only">Cerca per districte, secció, mesa o col·legi</label>
+    <input type="search" id="cens-search" class="cens-search-input"
+           placeholder="🔍 Cerca per districte, secció, mesa o col·legi…" autocomplete="off">
+    <p id="cens-row-count" class="text-muted" aria-live="polite"></p>
+  </div>
+
+  <div class="cens-table-wrap">
+    <table class="results-table cens-table" id="cens-table">
+      <caption class="sr-only">Cens electoral per mesa a {{ selected_nom }}</caption>
+      <thead>
+        <tr>
+          <th scope="col" data-sort-key="districte" data-sort-type="number" aria-sort="ascending" tabindex="0" role="button">
+            Districte <span class="sort-indicator" aria-hidden="true">▲</span>
+          </th>
+          <th scope="col" data-sort-key="seccio" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Secció <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="mesa" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
+            Mesa <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="colLegi" data-sort-type="text" aria-sort="none" tabindex="0" role="button">
+            Col·legi <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+          <th scope="col" data-sort-key="cens" data-sort-type="number" aria-sort="none" tabindex="0" role="button">
+            Cens <span class="sort-indicator" aria-hidden="true"></span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in mesa_rows %}
+        <tr data-districte="{{ m.districte }}" data-seccio="{{ m.seccio }}" data-mesa="{{ m.mesa }}"
+            data-col-legi="{{ m.col_legi }}" data-cens="{{ m.cens }}">
+          <td>{{ m.districte }}</td>
+          <td>{{ m.seccio }}</td>
+          <td>{{ m.mesa }}</td>
+          <td>{{ m.col_legi }}</td>
+          <td>{{ "{:,}".format(m.cens).replace(",", ".") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row" colspan="4">Total visible</th>
+          <td id="cens-total-visible">{{ "{:,}".format(total).replace(",", ".") }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/cens-table.js') }}"></script>
+{% endblock %}

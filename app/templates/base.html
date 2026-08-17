@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Portal de Dades Electorals{% endblock %} · Ajuntament de Rubí</title>
+  <meta name="description" content="Portal de dades electorals obertes de l'Ajuntament de Rubí.">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon-32.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon-180.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <a class="skip-link" href="#contingut-principal">Salta al contingut principal</a>
+
+  <header class="site-header">
+    <div class="site-header__top">
+      <div class="site-header__brand">
+        <span class="site-header__shield">
+          <img src="{{ url_for('static', filename='img/ajuntament-rubi-logo.png') }}" alt="Ajuntament de Rubí" height="42">
+        </span>
+        <span class="site-header__titles">
+          <span class="site-header__title">Portal de Dades Electorals</span>
+          <span class="site-header__subtitle">Ajuntament de Rubí</span>
+        </span>
+      </div>
+      <p class="site-header__opendata">Dades Obertes<br>Ajuntament de Rubí</p>
+    </div>
+    <div class="site-header__bar" aria-hidden="true"></div>
+    <nav class="site-nav" aria-label="Menú principal">
+      <ul>
+        {% for item in nav_items %}
+        <li>
+          <a href="{{ url_for(item.endpoint) }}"
+             {% if request.blueprint == item.endpoint.split('.')[0] %}aria-current="page" class="is-active"{% endif %}>
+            {{ item.label }}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </header>
+
+  <main id="contingut-principal" class="site-main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <p>© 2026 Ajuntament de Rubí - Dades Obertes</p>
+    {% if font_dades %}
+    <p>
+      Font de dades: {{ font_dades.label }}
+      <a href="{{ font_dades.url }}" target="_blank" rel="noopener noreferrer">(descarrega el CSV original)</a>
+    </p>
+    {% endif %}
+  </footer>
+
+  <div id="loading-overlay" class="loading-overlay" hidden role="status" aria-live="polite">
+    <div class="loading-overlay__spinner" aria-hidden="true"></div>
+    <p>Carregant dades…</p>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

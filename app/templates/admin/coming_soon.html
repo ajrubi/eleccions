@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Àrea privada{% endblock %}
+{% block content %}
+<section class="coming-soon">
+  <p class="coming-soon__badge">Pròximament</p>
+  <h1>Àrea privada / Administració</h1>
+  <p>Aquest apartat serà l'accés restringit per al personal de l'ajuntament: gestió de convocatòries i escrutini de vots per partit/mesa.</p>
+  <p class="text-muted">Totes les operacions d'escriptura (crear, modificar, eliminar) es faran contra una futura API REST d'administració amb autenticació OAuth2/JWT, control d'accés per rols i registre d'auditoria, complint el RGPD/LOPDGDD — mai escrivint a un fitxer o base de dades local.</p>
+  <a class="btn btn--outline" href="{{ url_for('resultats.index') }}">← Torna a Resultats electorals</a>
+</section>
+{% endblock %}

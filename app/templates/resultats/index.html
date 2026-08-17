@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Resultats electorals{% endblock %}
+{% block content %}
+
+<section class="filters" aria-label="Filtres de convocatòria">
+  <form method="get" action="{{ url_for('resultats.index') }}" class="filters__form">
+    <div class="filters__field">
+      <label for="tipus">Tipus d'elecció</label>
+      <select id="tipus" name="tipus" data-autosubmit>
+        {% for t in tipus_list %}
+        <option value="{{ t }}" {% if t == selected_tipus %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__field filters__field--wide">
+      <label for="codi">Convocatòria electoral</label>
+      <select id="codi" name="codi" data-autosubmit>
+        {% for c in filtered %}
+        <option value="{{ c.codi }}" {% if c.codi == selected_codi %}selected{% endif %}>{{ c.nom }} · {{ c.data }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__zone-group">
+      <div class="filters__field">
+        <label for="districte">Districte</label>
+        <select id="districte" name="districte" data-autosubmit>
+          <option value="">Tots els districtes</option>
+          {% for d in districtes %}
+          <option value="{{ d }}" {% if d == selected_districte %}selected{% endif %}>Districte {{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filters__field">
+        <label for="seccio">Secció</label>
+        <select id="seccio" name="seccio" data-autosubmit {% if not seccions %}disabled{% endif %}>
+          <option value="">Totes les seccions</option>
+          {% for s in seccions %}
+          <option value="{{ s }}" {% if s == selected_seccio %}selected{% endif %}>Secció {{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filters__field filters__field--narrow">
+        <label for="mesa">Mesa electoral</label>
+        <select id="mesa" name="mesa" data-autosubmit {% if not meses %}disabled{% endif %}>
+          <option value="">Totes les meses</option>
+          {% for m in meses %}
+          <option value="{{ m }}" {% if m == selected_mesa %}selected{% endif %}>Mesa {{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <noscript>
+      <button type="submit" class="btn btn--primary">Filtrar</button>
+    </noscript>
+  </form>
+</section>
+
+{% if error %}
+<div class="state-panel state-panel--error" role="alert">
+  <p class="state-panel__title">No s'han pogut carregar les dades electorals.</p>
+  <p class="state-panel__detail">{{ error }}</p>
+  <a class="btn btn--primary"
+     href="{{ url_for('resultats.index', tipus=selected_tipus, codi=selected_codi, districte=selected_districte, seccio=selected_seccio, mesa=selected_mesa, refresh=1) }}">
+    Torna-ho a provar
+  </a>
+</div>
+
+{% elif empty %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Encara no hi ha convocatòries disponibles.</p>
+  <p class="state-panel__detail">La font de dades no ha retornat cap registre.</p>
+</div>
+
+{% elif results %}
+<section class="results-header">
+  <div>
+    <h1>{{ results.nom }}</h1>
+    <p class="results-header__subtitle">
+      Resultats oficials · {{ results.data }}
+      {% if results.districte or results.seccio or results.mesa %}
+      · {{ [
+            ("Districte " ~ results.districte) if results.districte else None,
+            ("Secció " ~ results.seccio) if results.seccio else None,
+            ("Mesa " ~ results.mesa) if results.mesa else None,
+          ] | select | join(", ") }}
+      {% endif %}
+    </p>
+  </div>
+  <div class="results-header__actions">
+    <a class="btn btn--outline" href="{{ url_for('resultats.exporta_csv', codi=results.codi, districte=selected_districte, seccio=selected_seccio, mesa=selected_mesa) }}">📄 CSV</a>
+    <a class="btn btn--outline" href="{{ url_for('resultats.exporta_pdf', codi=results.codi, districte=selected_districte, seccio=selected_seccio, mesa=selected_mesa) }}">⬇ PDF</a>
+  </div>
+</section>
+
+<section class="cards" aria-label="Resum de la convocatòria">
+  <article class="card">
+    <h2 class="card__label">Cens electoral</h2>
+    <p class="card__value">{{ "{:,}".format(results.cens_total).replace(",", ".") }}</p>
+  </article>
+
+  <article class="card card--accent">
+    <h2 class="card__label">Participació</h2>
+    <p class="card__value">{{ (results.participacio_pct ~ "%") if results.participacio_pct is not none else "N/D" }}</p>
+    <p class="card__meta">{{ "{:,}".format(results.participants_total).replace(",", ".") }} vots</p>
+  </article>
+
+  <article class="card">
+    <h2 class="card__label">Abstenció</h2>
+    <p class="card__value">{{ (results.abstencio_pct ~ "%") if results.abstencio_pct is not none else "N/D" }}</p>
+    <p class="card__meta">
+      {{ "{:,}".format(results.abstencio_total).replace(",", ".") if results.abstencio_total is not none else "N/D" }} vots
+    </p>
+  </article>
+
+  <article class="card card--accent">
+    <h2 class="card__label">Total de vots</h2>
+    <p class="card__value">{{ "{:,}".format(results.participants_total).replace(",", ".") }}</p>
+  </article>
+</section>
+
+<section class="cards" aria-label="Desglossament de vots">
+  <article class="card">
+    <h2 class="card__label">Vots nuls</h2>
+    <p class="card__value">{{ "{:,}".format(results.vots_nuls).replace(",", ".") }}</p>
+  </article>
+
+  <article class="card">
+    <h2 class="card__label">Vots en blanc</h2>
+    <p class="card__value">{{ "{:,}".format(results.vots_blancs).replace(",", ".") }}</p>
+  </article>
+
+  <article class="card">
+    <h2 class="card__label">Vots a candidatures</h2>
+    <p class="card__value">{{ "{:,}".format(results.vots_candidatures).replace(",", ".") }}</p>
+  </article>
+
+  <article class="card card--accent">
+    <h2 class="card__label">Vots vàlids</h2>
+    <p class="card__value">{{ "{:,}".format(results.vots_valids).replace(",", ".") }}</p>
+    <p class="card__meta">Base del % de cada partit (LOREG)</p>
+  </article>
+</section>
+
+<p class="info-note">
+  El <strong>%</strong> de cada candidatura es calcula, segons la Llei Orgànica del Règim Electoral General
+  (LOREG), sobre els <strong>vots vàlids</strong> (vots a candidatures + vots en blanc) — no sobre el total de
+  vots emesos ni només sobre els vots a candidatures. Per això el vot en blanc abaixa lleugerament el % de tots
+  els partits, mentre que el vot nul no els afecta.
+</p>
+
+{% if not results.te_dades %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Aquesta convocatòria no té resultats per candidatura disponibles.</p>
+</div>
+{% else %}
+
+{% if results.regidors_arc %}
+<section class="arc-chart-wrap" aria-label="Repartiment de regidors">
+  <h2>Repartiment de regidors</h2>
+  <svg class="arc-chart" viewBox="{{ results.regidors_arc.view_box }}" role="img"
+       aria-label="Repartiment dels {{ results.regidors_arc.total_regidors }} regidors: {% for s in results.regidors_arc.segments %}{{ s.siglas }} {{ s.regidors }}{% if not loop.last %}, {% endif %}{% endfor %}.">
+    {% for s in results.regidors_arc.segments %}
+    <path d="{{ s.path }}" fill="{{ s.color }}">
+      <title>{{ s.nom }}: {{ s.regidors }} regidor{{ 's' if s.regidors != 1 else '' }}</title>
+    </path>
+    <text x="{{ s.label_x }}" y="{{ s.label_y }}" fill="{{ s.text_color }}" text-anchor="middle"
+          dominant-baseline="central" class="arc-chart__value" aria-hidden="true">{{ s.regidors }}</text>
+    {% endfor %}
+  </svg>
+  <ul class="arc-chart__legend">
+    {% for s in results.regidors_arc.segments %}
+    <li><span class="color-dot" style="background-color: {{ s.color }};" aria-hidden="true"></span>{{ s.siglas }}</li>
+    {% endfor %}
+  </ul>
+  <p class="arc-chart__footer">
+    {{ results.regidors_arc.total_regidors }} regidors · majoria absoluta: {{ results.regidors_arc.majoria_absoluta }}
+  </p>
+</section>
+{% endif %}
+
+<section class="results-columns">
+  <div class="results-table-wrap">
+    <h2>Resultats per candidatura</h2>
+    <table class="results-table">
+      <caption class="sr-only">Vots i percentatge per candidatura a {{ results.nom }}</caption>
+      <thead>
+        <tr>
+          <th scope="col"><span class="sr-only">Color</span></th>
+          <th scope="col">Candidatura</th>
+          <th scope="col">Vots</th>
+          <th scope="col">%</th>
+          {% if results.te_regidors %}<th scope="col">Regidors</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in results.candidatures %}
+        <tr>
+          <td><span class="color-dot" style="background-color: {{ c.color }};" aria-hidden="true"></span></td>
+          <td>{% if c.siglas %}<abbr class="siglas-abbr" title="{{ c.nom }}" tabindex="0">{{ c.siglas }}</abbr>{% else %}{{ c.nom }}{% endif %}</td>
+          <td>{{ "{:,}".format(c.vots).replace(",", ".") }}</td>
+          <td>{{ c.pct }}%</td>
+          {% if results.te_regidors %}<td>{{ c.regidors }}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if results.te_regidors %}
+    <p class="info-note">
+      Els <strong>regidors</strong> es reparteixen segons la <strong>Llei D'Hondt</strong> en l'àmbit
+      municipal (LOREG art. 180): només hi entren les candidatures amb, com a mínim, el
+      <strong>5%</strong> dels vots vàlids del municipi; els {{ results.total_regidors }} escons del
+      ple es reparteixen entre elles per mitjanes més altes.
+    </p>
+    {% endif %}
+  </div>
+
+  <div class="results-chart-wrap">
+    <h2>Distribució de vots</h2>
+    <ul class="bar-chart">
+      {% for c in results.chart_rows %}
+      <li class="bar-chart__row">
+        <span class="bar-chart__label">{{ c.siglas or c.nom }}</span>
+        <span class="bar-chart__track" role="img" aria-label="{{ c.nom }}: {{ '{:,}'.format(c.vots).replace(',', '.') }} vots, {{ c.pct }} per cent">
+          <span class="bar-chart__fill" style="width: {{ c.bar_pct }}%; background-color: {{ c.color }};"></span>
+        </span>
+        <span class="bar-chart__value">{{ c.pct }}%</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+
+<div id="siglas-tooltip" class="compare-tooltip" hidden role="status" aria-live="polite"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/siglas-tooltip.js') }}"></script>
+{% endblock %}

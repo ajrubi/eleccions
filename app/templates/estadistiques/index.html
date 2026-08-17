@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}Estadístiques comparatives{% endblock %}
+{% block content %}
+
+<section class="filters" aria-label="Filtre de tipus d'elecció">
+  <form method="get" action="{{ url_for('estadistiques.index') }}" class="filters__form">
+    <input type="hidden" name="vista" value="{{ vista }}">
+    <div class="filters__field">
+      <label for="tipus">Tipus d'elecció</label>
+      <select id="tipus" name="tipus" data-autosubmit>
+        {% for t in tipus_list %}
+        <option value="{{ t }}" {% if t == selected_tipus %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <noscript>
+      <button type="submit" class="btn btn--primary">Filtrar</button>
+    </noscript>
+  </form>
+</section>
+
+<nav class="subtabs" aria-label="Sub-apartats d'estadístiques comparatives">
+  <a class="subtabs__link {% if vista == 'participacio' %}is-active{% endif %}"
+     {% if vista == 'participacio' %}aria-current="page"{% endif %}
+     href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='participacio') }}">
+    Participació i abstenció
+  </a>
+  <a class="subtabs__link {% if vista == 'avancos' %}is-active{% endif %}"
+     {% if vista == 'avancos' %}aria-current="page"{% endif %}
+     href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='avancos') }}">
+    Participació per avanços
+  </a>
+  <a class="subtabs__link {% if vista == 'candidatures' %}is-active{% endif %}"
+     {% if vista == 'candidatures' %}aria-current="page"{% endif %}
+     href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='candidatures') }}">
+    Vots per candidatura
+  </a>
+</nav>
+
+{% if error %}
+<div class="state-panel state-panel--error" role="alert">
+  <p class="state-panel__title">No s'han pogut carregar les dades electorals.</p>
+  <p class="state-panel__detail">{{ error }}</p>
+  <a class="btn btn--primary" href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista=vista, refresh=1) }}">Torna-ho a provar</a>
+</div>
+
+{% elif empty %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Encara no hi ha convocatòries disponibles.</p>
+</div>
+
+{% elif vista == 'avancos' %}
+<section class="results-header">
+  <div>
+    <h1>Participació per avanços</h1>
+    <p class="results-header__subtitle">{{ selected_tipus }} · mapa de calor per convocatòria i checkpoint de recompte</p>
+  </div>
+</section>
+
+{% if not avancos or not avancos.rows %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">No hi ha convocatòries d'aquest tipus.</p>
+</div>
+{% else %}
+
+<p class="info-note">
+  Cada cel·la mostra la <strong>participació</strong> (vots emesos sobre el cens) tal com estava en aquell
+  moment del recompte: "Avanç 1" i "Avanç 2" són checkpoints parcials fets mentre encara durava l'escrutini
+  i "Avanç 3 (final)" és el recompte complet — el mateix valor que ja es mostra a "Participació i abstenció
+  per convocatòria". L'abstenció, a cada checkpoint, és sempre 100% menys la participació.
+</p>
+
+<section class="heatmap-wrap">
+  <div class="heatmap-scroll">
+    <table class="results-table heatmap-table">
+      <caption class="sr-only">Participació per avanços de recompte i convocatòria de tipus {{ selected_tipus }}</caption>
+      <thead>
+        <tr>
+          <th scope="col" class="heatmap-table__corner">Convocatòria</th>
+          {% for label in avancos.checkpoint_labels %}
+          <th scope="col">{{ label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in avancos.rows %}
+        <tr>
+          <th scope="row" class="heatmap-table__rowlabel">
+            {{ row.nom }} <span class="text-muted">({{ row.any or row.data }})</span>
+          </th>
+          {% for cp in row.checkpoints %}
+          {% if cp.pct is not none %}
+          <td class="heatmap-table__cell" style="background-color: {{ cp.bg }};"
+              title="{{ row.nom }} · {{ cp.label }}: {{ cp.pct }}% participació ({{ '{:,}'.format(cp.vots).replace(',', '.') }} vots), {{ (100 - cp.pct) | round(2) }}% abstenció">
+            {{ cp.pct }}%
+          </td>
+          {% else %}
+          <td class="heatmap-table__cell heatmap-table__cell--absent" title="{{ row.nom }}: sense dades de cens">—</td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% elif vista == 'candidatures' %}
+<section class="results-header">
+  <div>
+    <h1>Vots per candidatura</h1>
+    <p class="results-header__subtitle">{{ selected_tipus }} · mapa de calor per convocatòria</p>
+  </div>
+</section>
+
+{% if not heatmap or not heatmap.candidatures %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">No hi ha resultats per candidatura d'aquest tipus.</p>
+</div>
+{% else %}
+
+<p class="info-note">
+  Cada cel·la mostra el percentatge de vots que va obtenir la candidatura en aquella convocatòria, calculat
+  segons la LOREG sobre els <strong>vots vàlids</strong> (vots a candidatures + vots en blanc; els nuls hi
+  queden exclosos). Com més intens el color, més gran el percentatge; "—" vol dir que la candidatura no es
+  va presentar aquella convocatòria.
+</p>
+
+<section class="candidatura-picker" aria-label="Filtre de candidatures">
+  <p class="candidatura-picker__hint">
+    {% if selected_chips %}Mostrant només:{% else %}Mostrant totes les candidatures — cerca'n una per centrar la comparativa:{% endif %}
+  </p>
+
+  {% if selected_chips %}
+  <ul class="candidatura-picker__selected" aria-label="Candidatures seleccionades">
+    {% for chip in selected_chips %}
+    <li class="candidatura-chip">
+      <span class="color-dot" style="background-color: {{ chip.color }};" aria-hidden="true"></span>
+      {{ chip.siglas or chip.nom }}
+      <a class="candidatura-chip__remove"
+         href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='candidatures', partit=chip.remove_partits) }}"
+         aria-label="Treu {{ chip.nom }} de la comparativa">×</a>
+    </li>
+    {% endfor %}
+  </ul>
+  <a class="btn btn--outline candidatura-picker__clear" href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='candidatures') }}">Mostra-les totes</a>
+  {% endif %}
+
+  {% if available_options %}
+  <div class="candidatura-picker__search">
+    <label for="candidatura-search" class="sr-only">Cerca una candidatura per afegir-la a la comparativa</label>
+    <input type="text" id="candidatura-search" class="candidatura-picker__input"
+           placeholder="🔍 Cerca una candidatura per afegir-la…" autocomplete="off">
+    <ul class="candidatura-picker__suggestions" id="candidatura-suggestions" hidden>
+      {% for opt in available_options %}
+      <li class="candidatura-picker__suggestion" data-search="{{ (opt.siglas ~ ' ' ~ opt.nom) | lower }}">
+        <a href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='candidatures', partit=selected_partits + [opt.codi]) }}">
+          <span class="color-dot" style="background-color: {{ opt.color }};" aria-hidden="true"></span>
+          <strong>{{ opt.siglas or opt.nom }}</strong>{% if opt.siglas %} <span class="text-muted">{{ opt.nom }}</span>{% endif %}
+        </a>
+      </li>
+      {% endfor %}
+      <li class="candidatura-picker__empty" id="candidatura-no-match" hidden>Cap candidatura coincideix amb la cerca.</li>
+    </ul>
+  </div>
+
+  <noscript>
+    <form method="get" action="{{ url_for('estadistiques.index') }}" class="candidatura-picker__noscript-form">
+      <input type="hidden" name="tipus" value="{{ selected_tipus }}">
+      <input type="hidden" name="vista" value="candidatures">
+      {% for p in selected_partits %}<input type="hidden" name="partit" value="{{ p }}">{% endfor %}
+      <select name="partit">
+        {% for opt in available_options %}
+        <option value="{{ opt.codi }}">{{ opt.siglas or opt.nom }} — {{ opt.nom }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn--primary">Afegeix</button>
+    </form>
+  </noscript>
+  {% endif %}
+</section>
+
+<section class="heatmap-wrap">
+  <div class="heatmap-scroll">
+    <table class="results-table heatmap-table">
+      <caption class="sr-only">Percentatge de vots per candidatura i convocatòria de tipus {{ selected_tipus }}</caption>
+      <thead>
+        <tr>
+          <th scope="col" class="heatmap-table__corner">Candidatura</th>
+          {% for c in heatmap.convocatories %}
+          <th scope="col">{{ c.any or "?" }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for cand in heatmap.candidatures %}
+        <tr>
+          <th scope="row" class="heatmap-table__rowlabel">
+            <span class="color-dot" style="background-color: {{ cand.color }};" aria-hidden="true"></span>
+            {% if cand.siglas %}<abbr class="siglas-abbr" title="{{ cand.nom }}" tabindex="0">{{ cand.siglas }}</abbr>{% else %}{{ cand.nom }}{% endif %}
+          </th>
+          {% for cell in cand.cells %}
+          {% set conv = heatmap.convocatories[loop.index0] %}
+          {% if cell.presentat %}
+          <td class="heatmap-table__cell" style="background-color: {{ cell.bg }};"
+              title="{{ cand.nom }} · {{ conv.nom }} ({{ conv.any or conv.data }}): {{ cell.pct }}%, {{ '{:,}'.format(cell.vots).replace(',', '.') }} vots">
+            {{ cell.pct }}%
+          </td>
+          {% else %}
+          <td class="heatmap-table__cell heatmap-table__cell--absent"
+              title="{{ cand.nom }} no es va presentar a {{ conv.nom }} ({{ conv.any or conv.data }})">
+            —
+          </td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% else %}
+<section class="results-header">
+  <div>
+    <h1>Participació i abstenció</h1>
+    <p class="results-header__subtitle">{{ selected_tipus }} · evolució per convocatòria</p>
+  </div>
+</section>
+
+{% if not series %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">No hi ha convocatòries d'aquest tipus.</p>
+</div>
+{% else %}
+
+<section class="compare-panel">
+  <div class="compare-panel__legend" aria-hidden="true">
+    <span class="legend-item"><span class="legend-swatch legend-swatch--participacio"></span>Participació</span>
+    <span class="legend-item"><span class="legend-swatch legend-swatch--abstencio"></span>Abstenció</span>
+    <span class="legend-item"><span class="legend-swatch legend-swatch--nd"></span>Sense dades de cens</span>
+  </div>
+
+  <div class="compare-chart-scroll">
+    <ul class="compare-chart" role="list">
+      {% for s in series %}
+      <li class="compare-chart__group">
+        <div class="compare-chart__bar-wrap">
+          {% if s.te_dades %}
+          <div class="compare-chart__bar"
+               tabindex="0"
+               role="img"
+               aria-label="{{ s.nom }} ({{ s.data }}): participació {{ s.participacio_pct }} per cent, abstenció {{ s.abstencio_pct }} per cent, cens {{ '{:,}'.format(s.cens_total).replace(',', '.') }}"
+               data-nom="{{ s.nom }}"
+               data-data="{{ s.data }}"
+               data-cens="{{ '{:,}'.format(s.cens_total).replace(',', '.') }}"
+               data-participacio="{{ s.participacio_pct }}"
+               data-abstencio="{{ s.abstencio_pct }}"
+               data-participants="{{ '{:,}'.format(s.participants_total).replace(',', '.') }}"
+               data-abstents="{{ '{:,}'.format(s.abstencio_total).replace(',', '.') }}">
+            <span class="compare-chart__segment compare-chart__segment--participacio" style="height: {{ s.participacio_pct }}%;"></span>
+            <span class="compare-chart__segment compare-chart__segment--abstencio" style="height: {{ s.abstencio_pct }}%;"></span>
+          </div>
+          {% else %}
+          <div class="compare-chart__bar compare-chart__bar--nd"
+               tabindex="0"
+               role="img"
+               aria-label="{{ s.nom }} ({{ s.data }}): sense dades de cens"
+               data-nom="{{ s.nom }}"
+               data-data="{{ s.data }}"
+               data-nd="1">
+            <span class="compare-chart__segment compare-chart__segment--nd" style="height: 100%;"></span>
+          </div>
+          {% endif %}
+        </div>
+        <span class="compare-chart__label">{{ s.any or "?" }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section class="results-table-wrap compare-table-wrap">
+  <h2>Dades detallades</h2>
+  <table class="results-table">
+    <caption class="sr-only">Participació i abstenció per convocatòria de tipus {{ selected_tipus }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">Any</th>
+        <th scope="col">Convocatòria</th>
+        <th scope="col">Cens</th>
+        <th scope="col">Participació</th>
+        <th scope="col">Abstenció</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in series %}
+      <tr>
+        <td>{{ s.any or "—" }}</td>
+        <td>{{ s.nom }}</td>
+        <td>{{ "{:,}".format(s.cens_total).replace(",", ".") }}</td>
+        <td>{{ (s.participacio_pct ~ "%") if s.te_dades else "N/D" }}</td>
+        <td>{{ (s.abstencio_pct ~ "%") if s.te_dades else "N/D" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endif %}
+
+<div id="compare-tooltip" class="compare-tooltip" hidden role="status" aria-live="polite"></div>
+<div id="siglas-tooltip" class="compare-tooltip" hidden role="status" aria-live="polite"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/compare-chart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/candidatura-search.js') }}"></script>
+<script src="{{ url_for('static', filename='js/siglas-tooltip.js') }}"></script>
+{% endblock %}
