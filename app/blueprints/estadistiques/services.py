@@ -2,8 +2,9 @@
 
 This module performs no HTTP calls of its own: it only combines calls
 already implemented and tested in ResultatsApiClient
-(get_convocatories / get_results) and reshapes the result for each
-sub-apartat's chart and its accessible data-table fallback:
+(get_convocatories / get_results / get_mesa_results / get_zones) and
+reshapes the result for each sub-apartat's chart and its accessible
+data-table fallback:
   * "Participació i abstenció per convocatòria" (build_participacio_abstencio_series)
   * "Participació i abstenció per avanços" (build_participacio_avancos_heatmap)
     — un mapa de calor amb una fila per convocatòria i una columna per
@@ -13,11 +14,15 @@ sub-apartat's chart and its accessible data-table fallback:
   * "Vots per candidatura" (build_vots_candidatura_heatmap) — un mapa de
     calor amb una fila per candidatura i una columna per convocatòria,
     on la intensitat del color representa el % de vots obtinguts.
+  * "Partits més votats" (build_partits_mes_votats) — un mapa de calor amb
+    una fila per zona (municipi/districte/secció/mesa, segons el nivell
+    de detall triat als filtres) i una columna per convocatòria, on cada
+    cel·la mostra quina candidatura hi va guanyar.
 """
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 
 def unique_tipus(convocatories: list[dict[str, Any]]) -> list[str]:
@@ -258,3 +263,195 @@ def filter_heatmap_by_partits(heatmap: dict[str, Any], selected_codis: list[str]
         return heatmap
     selected_set = set(selected_codis)
     return {**heatmap, "candidatures": [e for e in heatmap["candidatures"] if e["codi"] in selected_set]}
+
+
+# ---------------------------------------------------------------------------
+# "Partits més votats" — candidatura guanyadora per convocatòria i zona
+# ---------------------------------------------------------------------------
+
+def zone_options(client, convocatories: list[dict[str, Any]], tipus: str) -> list[dict[str, str]]:
+    """Univers de districtes/seccions/meses pels desplegables de filtre.
+
+    S'agafen de la convocatòria més recent d'aquest tipus (la geografia
+    electoral es manté pràcticament estable entre convocatòries del mateix
+    tipus), no de totes: així no cal sumar una crida per convocatòria només
+    per omplir uns desplegables.
+    """
+    ordered = _ordered_convocatories(convocatories, tipus)
+    if not ordered:
+        return []
+    try:
+        return client.get_zones(ordered[-1]["codi"])
+    except (ValueError, KeyError):
+        return []
+
+
+def unique_districtes(zones: list[dict[str, str]]) -> list[str]:
+    seen: list[str] = []
+    for z in zones:
+        if z["districte"] not in seen:
+            seen.append(z["districte"])
+    return seen
+
+
+def seccions_for_districte(zones: list[dict[str, str]], districte: str) -> list[str]:
+    if not districte:
+        return []
+    seen: list[str] = []
+    for z in zones:
+        if z["districte"] == districte and z["seccio"] not in seen:
+            seen.append(z["seccio"])
+    return seen
+
+
+def meses_for_districte_seccio(zones: list[dict[str, str]], districte: str, seccio: str) -> list[str]:
+    if not districte or not seccio:
+        return []
+    seen: list[str] = []
+    for z in zones:
+        if z["districte"] == districte and z["seccio"] == seccio and z["mesa"] not in seen:
+            seen.append(z["mesa"])
+    return seen
+
+
+def _mesa_matches(mesa_row: dict[str, Any], districte: str, seccio: str, mesa: str) -> bool:
+    if districte and mesa_row["districte"] != districte:
+        return False
+    if seccio and mesa_row["seccio"] != seccio:
+        return False
+    if mesa and mesa_row["mesa"] != mesa:
+        return False
+    return True
+
+
+def _winner_for_zona(
+    mesa_results: list[dict[str, Any]], districte: str, seccio: str, mesa: str,
+) -> Optional[dict[str, Any]]:
+    """Candidatura guanyadora dins la zona indicada, per a una convocatòria.
+
+    Suma els vots de totes les meses que encaixen amb el filtre de zona
+    (buit = totes) i es queda amb la candidatura amb més vots. El % es
+    calcula sobre els "vots vàlids" (candidatures + blancs, sense nuls),
+    igual que a resultats_client.get_results, perquè sigui comparable amb
+    la resta de l'aplicació. Retorna None si la zona no té cap mesa amb
+    dades a aquesta convocatòria.
+    """
+    per_partit: dict[Any, dict[str, Any]] = {}
+    total_blancs = 0
+    total_vots_candidatures = 0
+    hi_ha_meses = False
+
+    for m in mesa_results:
+        if not _mesa_matches(m, districte, seccio, mesa):
+            continue
+        hi_ha_meses = True
+        total_blancs += m["blancs_mesa"]
+        for c in m["candidatures"]:
+            total_vots_candidatures += c["vots"]
+            key = c["codi"] if c["codi"] else c["nom"]
+            entry = per_partit.setdefault(key, {"nom": c["nom"], "siglas": c["siglas"], "color": c["color"], "vots": 0})
+            entry["vots"] += c["vots"]
+
+    if not hi_ha_meses or not per_partit:
+        return None
+
+    ranked = sorted(per_partit.values(), key=lambda e: e["vots"], reverse=True)
+    winner = dict(ranked[0])
+    runner_up_vots = ranked[1]["vots"] if len(ranked) > 1 else 0
+    vots_valids = total_vots_candidatures + total_blancs
+    winner["pct"] = round((winner["vots"] / vots_valids) * 100, 2) if vots_valids > 0 else 0.0
+    winner["marge_vots"] = winner["vots"] - runner_up_vots
+    winner["marge_pct"] = round((winner["marge_vots"] / vots_valids) * 100, 2) if vots_valids > 0 else None
+    winner["ajustat"] = len(ranked) > 1 and winner["marge_pct"] is not None and winner["marge_pct"] < 5
+    return winner
+
+
+def _row_specs(zones: list[dict[str, str]], districte: str, seccio: str) -> list[dict[str, Any]]:
+    """Construeix les files de la taula segons el nivell de detall triat.
+
+    Sempre es mostra primer una fila "resum" de l'àmbit seleccionat (tot el
+    municipi, tot un districte o tota una secció) i, a sota, el desglossament
+    del nivell immediatament inferior — mai totes les meses de cop, perquè la
+    taula continuï sent llegible sense filtrar. No hi ha cap filtre propi de
+    mesa: en triar una secció ja se'n desglossen totes les meses com a files.
+    """
+    if seccio:
+        rows = [{"label": "Tota la secció", "districte": districte, "seccio": seccio, "mesa": "", "is_total": True}]
+        for m in meses_for_districte_seccio(zones, districte, seccio):
+            rows.append({"label": f"Mesa {m}", "districte": districte, "seccio": seccio, "mesa": m, "is_total": False})
+        return rows
+
+    if districte:
+        rows = [{"label": "Tot el districte", "districte": districte, "seccio": "", "mesa": "", "is_total": True}]
+        for s in seccions_for_districte(zones, districte):
+            rows.append({"label": f"Secció {s}", "districte": districte, "seccio": s, "mesa": "", "is_total": False})
+        return rows
+
+    rows = [{"label": "Tot el municipi", "districte": "", "seccio": "", "mesa": "", "is_total": True}]
+    for d in unique_districtes(zones):
+        rows.append({"label": f"Districte {d}", "districte": d, "seccio": "", "mesa": "", "is_total": False})
+    return rows
+
+
+def build_partits_mes_votats(
+    client, convocatories: list[dict[str, Any]], tipus: str, zones: list[dict[str, str]],
+    districte: str = "", seccio: str = "",
+) -> dict[str, Any]:
+    """Candidatura guanyadora per convocatòria, a cada zona del nivell triat.
+
+    Igual que build_vots_candidatura_heatmap, es llegeix per columnes (una
+    convocatòria cada una) amb l'any més recent primer, i cada cel·la porta
+    ja calculat el seu color de fons — aquí sempre el de la candidatura
+    guanyadora, amb una opacitat proporcional al seu % de vots vàlids
+    respecte al màxim de tota la graella, perquè les victòries més àmplies
+    ressaltin més que les ajustades.
+    """
+    ordered = list(reversed(_ordered_convocatories(convocatories, tipus)))
+    convocatories_meta = [{"codi": c["codi"], "nom": c["nom"], "any": c["any"], "data": c["data"]} for c in ordered]
+
+    row_specs = _row_specs(zones, districte, seccio)
+    rows = [{**spec, "cells": [None] * len(ordered)} for spec in row_specs]
+
+    for i, c in enumerate(ordered):
+        try:
+            mesa_results = client.get_mesa_results(c["codi"])
+        except ValueError:
+            mesa_results = []
+        for row in rows:
+            row["cells"][i] = _winner_for_zona(mesa_results, row["districte"], row["seccio"], row["mesa"])
+
+    max_pct = max((cell["pct"] for row in rows for cell in row["cells"] if cell), default=0.0)
+    for row in rows:
+        for cell in row["cells"]:
+            if cell is None:
+                continue
+            r, g, b = _hex_to_rgb(cell["color"])
+            if max_pct > 0:
+                alpha = _HEATMAP_MIN_ALPHA + (cell["pct"] / max_pct) * (_HEATMAP_MAX_ALPHA - _HEATMAP_MIN_ALPHA)
+            else:
+                alpha = _HEATMAP_MIN_ALPHA
+            cell["bg"] = f"rgba({r}, {g}, {b}, {alpha:.2f})"
+
+    return {"convocatories": convocatories_meta, "rows": rows, "max_pct": max_pct}
+
+
+def filter_partits_mes_votats_by_convocatoria(taula: dict[str, Any], selected_codi: str) -> dict[str, Any]:
+    """Restringeix la taula a una sola columna de convocatòria.
+
+    Un `selected_codi` buit vol dir "cap filtre": es mostren totes les
+    convocatòries del tipus, igual que a filter_heatmap_by_partits. Els
+    colors de fons de les cel·les ja es van calcular sobre l'escala de tota
+    la graella a build_partits_mes_votats i no es recalculen aquí, perquè
+    la intensitat d'una convocatòria es continuï podent comparar amb la
+    resta encara que ara només se'n vegi una.
+    """
+    if not selected_codi:
+        return taula
+    idx = next((i for i, c in enumerate(taula["convocatories"]) if c["codi"] == selected_codi), None)
+    if idx is None:
+        return taula
+    return {
+        "convocatories": [taula["convocatories"][idx]],
+        "rows": [{**row, "cells": [row["cells"][idx]]} for row in taula["rows"]],
+        "max_pct": taula["max_pct"],
+    }

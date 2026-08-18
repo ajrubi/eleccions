@@ -689,6 +689,25 @@ a { color: var(--color-red-dark); }
   font-weight: 400;
   background: var(--color-bg);
 }
+.heatmap-table__rowlabel--total {
+  background: var(--color-red-light);
+}
+
+/* ---------- Partits més votats (Estadístiques) ---------- */
+.heatmap-table__cell--winner {
+  white-space: normal;
+  min-width: 8.5rem;
+  text-align: left;
+  line-height: 1.5;
+}
+.heatmap-table__cell--winner .color-dot { margin-right: .3rem; }
+.heatmap-table__cell--winner .mesa-badge {
+  display: block;
+  width: fit-content;
+  margin-top: .2rem;
+  padding: .05rem .45rem;
+  font-size: .68rem;
+}
 
 /* ---------- Comparativa Participació / Abstenció (Estadístiques) ---------- */
 .compare-panel {

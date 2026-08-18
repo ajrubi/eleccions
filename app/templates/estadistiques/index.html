@@ -13,6 +13,37 @@
         {% endfor %}
       </select>
     </div>
+    {% if vista == 'partits_mes_votats' %}
+    <div class="filters__field filters__field--wide">
+      <label for="convocatoria">Convocatòria</label>
+      <select id="convocatoria" name="convocatoria" data-autosubmit>
+        <option value="" {% if not selected_convocatoria %}selected{% endif %}>Totes (compara-les totes)</option>
+        {% for c in convocatoria_options %}
+        <option value="{{ c.codi }}" {% if c.codi == selected_convocatoria %}selected{% endif %}>{{ c.nom }} · {{ c.data }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__zone-group">
+      <div class="filters__field">
+        <label for="districte">Districte</label>
+        <select id="districte" name="districte" data-autosubmit>
+          <option value="">Tots els districtes</option>
+          {% for d in districtes %}
+          <option value="{{ d }}" {% if d == selected_districte %}selected{% endif %}>Districte {{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filters__field">
+        <label for="seccio">Secció</label>
+        <select id="seccio" name="seccio" data-autosubmit {% if not seccions %}disabled{% endif %}>
+          <option value="">Totes les seccions</option>
+          {% for s in seccions %}
+          <option value="{{ s }}" {% if s == selected_seccio %}selected{% endif %}>Secció {{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endif %}
     <noscript>
       <button type="submit" class="btn btn--primary">Filtrar</button>
     </noscript>
@@ -34,6 +65,11 @@
      {% if vista == 'candidatures' %}aria-current="page"{% endif %}
      href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='candidatures') }}">
     Vots per candidatura
+  </a>
+  <a class="subtabs__link {% if vista == 'partits_mes_votats' %}is-active{% endif %}"
+     {% if vista == 'partits_mes_votats' %}aria-current="page"{% endif %}
+     href="{{ url_for('estadistiques.index', tipus=selected_tipus, vista='partits_mes_votats') }}">
+    Partits més votats
   </a>
 </nav>
 
@@ -212,6 +248,79 @@
               title="{{ cand.nom }} no es va presentar a {{ conv.nom }} ({{ conv.any or conv.data }})">
             —
           </td>
+          {% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% elif vista == 'partits_mes_votats' %}
+<section class="results-header">
+  <div>
+    <h1>Partits més votats</h1>
+    <p class="results-header__subtitle">
+      {{ selected_tipus }} ·
+      {% if selected_seccio %}Secció {{ selected_seccio }} (districte {{ selected_districte }}), per mesa
+      {% elif selected_districte %}Districte {{ selected_districte }}, per secció
+      {% else %}Tot el municipi, per districte
+      {% endif %}
+      {% if selected_convocatoria and partits_taula and partits_taula.convocatories %}
+      · {{ partits_taula.convocatories[0].nom }} ({{ partits_taula.convocatories[0].data }})
+      {% endif %}
+    </p>
+  </div>
+</section>
+
+{% if not partits_taula or not partits_taula.rows %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">No hi ha convocatòries d'aquest tipus.</p>
+</div>
+{% else %}
+
+<p class="info-note">
+  Cada cel·la mostra la candidatura <strong>guanyadora</strong> a la zona d'aquella fila, amb el seu percentatge
+  sobre els vots vàlids (candidatures + blancs, sense nuls). Com més ampli el marge de victòria, més intens el
+  color; una victòria per menys de 5 punts es marca com a <strong>ajustada</strong>. La primera fila sempre
+  resumeix l'àmbit seleccionat als filtres (tot el municipi, tot un districte o tota una secció); usa els
+  desplegables de <strong>Districte</strong> i <strong>Secció</strong> de dalt per anar baixant de nivell —
+  en triar una secció ja hi apareixen totes les seves meses com a files — o el de <strong>Convocatòria</strong>
+  per centrar-te en una sola elecció en comptes de comparar-les totes.
+</p>
+
+<section class="heatmap-wrap">
+  <div class="heatmap-scroll">
+    <table class="results-table heatmap-table">
+      <caption class="sr-only">Candidatura guanyadora per zona i convocatòria de tipus {{ selected_tipus }}</caption>
+      <thead>
+        <tr>
+          <th scope="col" class="heatmap-table__corner">Zona</th>
+          {% for c in partits_taula.convocatories %}
+          <th scope="col">{{ c.any or "?" }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in partits_taula.rows %}
+        <tr>
+          <th scope="row" class="heatmap-table__rowlabel{{ ' heatmap-table__rowlabel--total' if row.is_total }}">
+            {{ row.label }}
+          </th>
+          {% for cell in row.cells %}
+          {% set conv = partits_taula.convocatories[loop.index0] %}
+          {% if cell %}
+          <td class="heatmap-table__cell heatmap-table__cell--winner" style="background-color: {{ cell.bg }};"
+              title="{{ row.label }} · {{ conv.nom }} ({{ conv.any or conv.data }}): {{ cell.nom }}, {{ cell.pct }}% ({{ '{:,}'.format(cell.vots).replace(',', '.') }} vots){% if cell.marge_pct is not none %}, guanya per {{ cell.marge_pct }} punts ({{ '{:,}'.format(cell.marge_vots).replace(',', '.') }} vots){% endif %}">
+            <span class="color-dot" style="background-color: {{ cell.color }};" aria-hidden="true"></span>
+            {% if cell.siglas %}<abbr class="siglas-abbr" title="{{ cell.nom }}" tabindex="0">{{ cell.siglas }}</abbr>{% else %}{{ cell.nom }}{% endif %}
+            <span class="text-muted">{{ cell.pct }}%</span>
+            {% if cell.ajustat %}<span class="mesa-badge mesa-badge--pending" title="Victòria ajustada (marge inferior a 5 punts)">ajustada</span>{% endif %}
+          </td>
+          {% else %}
+          <td class="heatmap-table__cell heatmap-table__cell--absent" title="{{ row.label }}: sense dades a {{ conv.nom }} ({{ conv.any or conv.data }})">—</td>
           {% endif %}
           {% endfor %}
         </tr>
