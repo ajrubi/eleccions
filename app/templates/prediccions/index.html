@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Prediccions{% endblock %}
+{% block content %}
+
+<section class="filters" aria-label="Filtre de tipus d'elecció">
+  <form method="get" action="{{ url_for('prediccions.index') }}" class="filters__form">
+    <div class="filters__field">
+      <label for="tipus">Tipus d'elecció</label>
+      <select id="tipus" name="tipus" data-autosubmit>
+        {% for t in tipus_list %}
+        <option value="{{ t }}" {% if t == selected_tipus %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <noscript>
+      <button type="submit" class="btn btn--primary">Filtrar</button>
+    </noscript>
+  </form>
+</section>
+
+{% if error %}
+<div class="state-panel state-panel--error" role="alert">
+  <p class="state-panel__title">No s'han pogut carregar les dades electorals.</p>
+  <p class="state-panel__detail">{{ error }}</p>
+  <a class="btn btn--primary" href="{{ url_for('prediccions.index', tipus=selected_tipus, refresh=1) }}">Torna-ho a provar</a>
+</div>
+
+{% elif empty %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">Encara no hi ha convocatòries disponibles.</p>
+</div>
+
+{% else %}
+<section class="results-header">
+  <div>
+    <h1>🔮 Prediccions</h1>
+    <p class="results-header__subtitle">{{ selected_tipus }} · tria els partits i descobreix cap a on apunta la seva tendència</p>
+  </div>
+</section>
+
+<p class="info-note">
+  Això és un <strong>joc estadístic</strong>, no una enquesta ni una previsió electoral oficial. La predicció es
+  calcula només a partir de la <strong>tendència del % de vots vàlids</strong> de cada partit a convocatòries
+  anteriors del mateix tipus (regressió lineal senzilla) — no incorpora cap dada d'intenció de vot externa. Com
+  menys convocatòries hi hagi i més irregular sigui la seva evolució, menys fiable és la predicció.
+</p>
+
+{% if not partit_options %}
+<div class="state-panel state-panel--empty">
+  <p class="state-panel__title">No hi ha cap partit amb resultats per a aquest tipus d'elecció.</p>
+</div>
+{% else %}
+
+{% if not (selected_partits and predictions) %}
+<section class="prediccio-picker-panel">
+  <form method="get" action="{{ url_for('prediccions.index') }}" class="prediccio-picker">
+    <input type="hidden" name="tipus" value="{{ selected_tipus }}">
+    <fieldset class="prediccio-picker__fieldset">
+      <legend>Tria els partits que vols predir</legend>
+
+      <div class="prediccio-picker__toolbar">
+        <div class="prediccio-picker__search">
+          <label for="prediccio-search" class="sr-only">Cerca un partit per filtrar la llista</label>
+          <input type="text" id="prediccio-search" class="candidatura-picker__input"
+                 placeholder="🔍 Cerca un partit per nom o sigles…" autocomplete="off">
+        </div>
+        <button type="submit" class="btn btn--primary prediccio-picker__submit">🔮 Fes la predicció!</button>
+      </div>
+
+      <div class="prediccio-picker__grid" id="prediccio-grid">
+        {% for opt in partit_options %}
+        <label class="prediccio-picker__option" data-search="{{ (opt.siglas ~ ' ' ~ opt.nom) | lower }}">
+          <input type="checkbox" name="partit" value="{{ opt.codi }}" {% if opt.codi in selected_partits %}checked{% endif %}>
+          <span class="color-dot" style="background-color: {{ opt.color }};" aria-hidden="true"></span>
+          {% if opt.siglas %}<abbr class="siglas-abbr" title="{{ opt.nom }}" tabindex="0">{{ opt.siglas }}</abbr>{% else %}<span>{{ opt.nom }}</span>{% endif %}
+        </label>
+        {% endfor %}
+      </div>
+      <p class="prediccio-picker__no-match" id="prediccio-no-match" hidden>Cap partit coincideix amb la cerca.</p>
+    </fieldset>
+  </form>
+</section>
+{% endif %}
+
+{% if selected_partits and predictions %}
+<section class="prediccio-results" aria-label="Resultat de la predicció">
+  <div class="prediccio-results__header">
+    <h2>Resultat de la predicció</h2>
+    <a class="btn btn--outline" href="{{ url_for('prediccions.index', tipus=selected_tipus) }}">🔄 Fes una altra predicció</a>
+  </div>
+  <div class="prediccio-cards">
+    {% for p in predictions %}
+    <article class="prediccio-card prediccio-card--{{ p.trend.direction if p.trend else 'nodata' }}" style="animation-delay: {{ loop.index0 * 0.08 }}s;">
+      <header class="prediccio-card__header">
+        <span class="color-dot" style="background-color: {{ p.color or '#901b13' }};" aria-hidden="true"></span>
+        <h3>{% if p.siglas %}<abbr class="siglas-abbr" title="{{ p.nom }}" tabindex="0">{{ p.siglas }}</abbr>{% else %}{{ p.nom }}{% endif %}</h3>
+      </header>
+
+      {% if not p.trend or p.trend.n_convocatories == 0 %}
+      <p class="prediccio-card__badge prediccio-card__badge--nodata">❔ Sense dades històriques</p>
+      <p class="prediccio-card__detail">Aquest partit no s'ha presentat mai a convocatòries de tipus "{{ selected_tipus }}" amb resultats disponibles.</p>
+
+      {% else %}
+        {% if p.trend.direction == 'puja' %}
+        <p class="prediccio-card__badge prediccio-card__badge--puja">📈 Pujarà</p>
+        {% elif p.trend.direction == 'baixa' %}
+        <p class="prediccio-card__badge prediccio-card__badge--baixa">📉 Baixarà</p>
+        {% else %}
+        <p class="prediccio-card__badge prediccio-card__badge--estable">➖ Es mantindrà</p>
+        {% endif %}
+
+        <p class="prediccio-card__numbers">
+          <span class="prediccio-card__last">Últim resultat: <strong>{{ p.trend.last_pct }}%</strong></span>
+          <span class="prediccio-card__arrow" aria-hidden="true">→</span>
+          <span class="prediccio-card__predicted">Predicció: <strong>{{ p.trend.predicted_pct }}%</strong></span>
+        </p>
+
+        {% if p.trend.n_convocatories == 1 %}
+        <p class="prediccio-card__detail">Només hi ha una convocatòria amb dades: no es pot calcular cap tendència, encara.</p>
+        {% else %}
+        <p class="prediccio-card__detail">
+          {{ "+" if p.trend.delta > 0 }}{{ p.trend.delta }} punts respecte a l'últim resultat, sobre
+          {{ p.trend.n_convocatories }} convocatòries analitzades.
+          Confiança:
+          <span class="prediccio-confidence prediccio-confidence--{{ p.trend.confidence }}">
+            {% if p.trend.confidence == 'alta' %}Alta
+            {% elif p.trend.confidence == 'mitjana' %}Mitjana
+            {% else %}Baixa
+            {% endif %}
+          </span>
+        </p>
+        {% endif %}
+
+        <details class="prediccio-card__history">
+          <summary>Historial de resultats</summary>
+          <ul>
+            {% for h in p.history %}
+            <li>{{ h.any or h.data }}: {{ h.pct }}% ({{ '{:,}'.format(h.vots).replace(',', '.') }} vots)</li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endif %}
+
+<footer class="prediccio-methodology">
+  <h2>Com es calculen aquestes prediccions?</h2>
+  <dl>
+    <dt>Dades de partida</dt>
+    <dd>
+      El % de <strong>vots vàlids</strong> (vots a candidatures + vots en blanc, sense comptar-hi els nuls) que
+      cada partit va treure a cada convocatòria oficial anterior del mateix tipus d'elecció, en ordre cronològic.
+      Els anys en què un partit no es va presentar no compten com un 0%: simplement no formen part de la seva sèrie.
+    </dd>
+    <dt>Mètode de predicció</dt>
+    <dd>
+      Una <strong>regressió lineal per mínims quadrats</strong> sobre aquesta sèrie de percentatges: s'ajusta la
+      recta que millor hi encaixa i s'extrapola un punt més enllà de l'última convocatòria per obtenir el %
+      previst. Amb una sola convocatòria no hi ha prou punts per traçar cap recta, així que la predicció és
+      simplement el mateix % de l'última vegada.
+    </dd>
+    <dt>Direcció (puja / baixa / es mantindrà)</dt>
+    <dd>
+      Es compara el % previst amb l'últim % real. Si la diferència és inferior a <strong>0,3 punts</strong> es
+      considera soroll estadístic i es mostra com a "es mantindrà"; per sobre, com a pujada o baixada segons el
+      signe.
+    </dd>
+    <dt>Nivell de confiança</dt>
+    <dd>
+      Depèn de quantes convocatòries hi ha i de si totes es mouen en el mateix sentit (sempre a l'alça o sempre a
+      la baixa): <strong>alta</strong> amb 4 o més convocatòries de tendència consistent, <strong>mitjana</strong>
+      amb 3, i <strong>baixa</strong> en qualsevol altre cas (pocs punts o una evolució que puja i baixa
+      alternativament, que és molt menys fiable d'extrapolar).
+    </dd>
+    <dt>Dades externes</dt>
+    <dd>
+      Aquesta versió <strong>no</strong> incorpora cap font externa d'intenció de vot (enquestes, baròmetres...):
+      la predicció es basa exclusivament en la tendència dels resultats oficials anteriors.
+    </dd>
+  </dl>
+  <p class="prediccio-methodology__disclaimer">
+    Recorda: és un joc estadístic senzill amb finalitat lúdica i divulgativa, no una enquesta ni una previsió
+    electoral oficial.
+  </p>
+</footer>
+
+{% endif %}
+
+<div id="siglas-tooltip" class="compare-tooltip" hidden role="status" aria-live="polite"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/prediccio-search.js') }}"></script>
+<script src="{{ url_for('static', filename='js/siglas-tooltip.js') }}"></script>
+{% endblock %}

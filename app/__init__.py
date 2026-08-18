@@ -59,12 +59,14 @@ def create_app(config_class: type = Config) -> Flask:
     from .blueprints.cens.routes import bp as cens_bp
     from .blueprints.mesa.routes import bp as mesa_bp
     from .blueprints.estadistiques.routes import bp as estadistiques_bp
+    from .blueprints.prediccions.routes import bp as prediccions_bp
     from .blueprints.admin.routes import bp as admin_bp
 
     app.register_blueprint(resultats_bp)
     app.register_blueprint(cens_bp)
     app.register_blueprint(mesa_bp)
     app.register_blueprint(estadistiques_bp)
+    app.register_blueprint(prediccions_bp)
     app.register_blueprint(admin_bp)
 
     @app.route("/")
@@ -72,14 +74,16 @@ def create_app(config_class: type = Config) -> Flask:
         return redirect(url_for("resultats.index"))
 
     # Which open-data CSV backs the page currently being rendered, keyed by
-    # blueprint name: "resultats" and "estadistiques" both read from
-    # RESULTATS_CLIENT (app/services/api_clients/resultats_client.py), so
-    # they share the same source. "admin" is still a placeholder with no
-    # live data source, so it's deliberately left out — the footer just
-    # won't show a "Font de dades" line for it.
+    # blueprint name: "resultats", "estadistiques" i "prediccions" totes
+    # tres llegeixen de RESULTATS_CLIENT
+    # (app/services/api_clients/resultats_client.py), així que comparteixen
+    # la mateixa font. "admin" és encara un placeholder sense font de dades
+    # pròpia, per això queda deliberadament fora — el peu de pàgina
+    # simplement no hi mostra cap línia de "Font de dades".
     font_dades_per_blueprint = {
         "resultats": {"label": "Resultats electorals", "url": app.config["RESULTATS_SOURCE_URL"]},
         "estadistiques": {"label": "Resultats electorals", "url": app.config["RESULTATS_SOURCE_URL"]},
+        "prediccions": {"label": "Resultats electorals", "url": app.config["RESULTATS_SOURCE_URL"]},
         "cens": {"label": "Cens electoral", "url": app.config["CENS_SOURCE_URL"]},
         "mesa": {"label": "Estat d'escrutini per mesa", "url": app.config["MESA_ESTAT_SOURCE_URL"]},
     }
@@ -92,6 +96,7 @@ def create_app(config_class: type = Config) -> Flask:
                 {"endpoint": "cens.index", "label": "Cens electoral"},
                 {"endpoint": "mesa.index", "label": "Resultats per mesa"},
                 {"endpoint": "estadistiques.index", "label": "Estadístiques comparatives"},
+                {"endpoint": "prediccions.index", "label": "Prediccions"},
                 {"endpoint": "admin.index", "label": "Àrea privada"},
             ],
             "font_dades": font_dades_per_blueprint.get(request.blueprint),
