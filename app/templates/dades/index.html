@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Dades{% endblock %}
+{% block content %}
+
+<section class="results-header">
+  <div>
+    <h1>Dades obertes d'aquest portal</h1>
+    <p class="results-header__subtitle">
+      Catàleg dels tres CSV oberts que consumeix el portal: quins camps porten, quants registres tenen ara mateix i com descarregar-los — més la tecnologia i els càlculs que en fa cada apartat.
+    </p>
+  </div>
+  <div class="results-header__actions">
+    <a class="btn btn--outline" href="{{ url_for('dades.index', refresh=1) }}">Recarrega les dades</a>
+  </div>
+</section>
+
+<p class="info-note">
+  Aquest portal no té cap base de dades pròpia: cada un dels tres conjunts de dades de sota es descarrega
+  directament del CSV obert original i es tracta com un endpoint de només lectura (vegeu «Tecnologia» més avall).
+  Els comptatges de columnes i registres que hi veus es llegeixen del mateix CSV, però no a cada càrrega de
+  pàgina: es guarden un temps en una caché en memòria (el TTL — vegeu-lo a cada font més avall) per no haver
+  de tornar a descarregar tot el fitxer cada cop. Si vols forçar una lectura immediata sense esperar que
+  caduqui, fes servir «Recarrega les dades».
+</p>
+
+{% for ds in datasets %}
+<section class="dataset-panel" aria-labelledby="dataset-{{ ds.key }}-title">
+  <div class="dataset-panel__header">
+    <div>
+      <h2 id="dataset-{{ ds.key }}-title">{{ ds.titol }}</h2>
+      <p class="dataset-panel__file">
+        <code>{{ ds.fitxer }}</code>
+        <span class="dataset-panel__badge">{{ ds.grup }}</span>
+      </p>
+    </div>
+    <a class="btn btn--primary" href="{{ ds.url }}" target="_blank" rel="noopener noreferrer">Descarrega el CSV original</a>
+  </div>
+
+  <p>{{ ds.descripcio }}</p>
+
+  <p class="info-note dataset-panel__ttl">
+    <strong>Caché (TTL):</strong> aquesta font es guarda en memòria com a màxim <strong>{{ ds.ttl_label }}</strong>
+    abans de tornar-se a descarregar del CSV original.
+    {% if ds.ttl_note_extra %}{{ ds.ttl_note_extra }}{% endif %}
+  </p>
+
+  {% if ds.error %}
+  <div class="state-panel state-panel--error" role="alert">
+    <p class="state-panel__title">No s'ha pogut llegir aquesta font ara mateix.</p>
+    <p class="state-panel__detail">{{ ds.error }}</p>
+  </div>
+  {% else %}
+
+  <p class="info-note dataset-panel__usage"><strong>Com utilitzar-lo:</strong> {{ ds.us }}</p>
+
+  <section class="cards cards--single" aria-label="Mida del conjunt de dades">
+    <article class="card card--accent">
+      <h3 class="card__label">Registres (files)</h3>
+      <p class="card__value">{{ "{:,}".format(ds.n_files).replace(",", ".") }}</p>
+      <p class="card__meta">{{ ds.n_columnes }} camps per registre</p>
+    </article>
+  </section>
+
+  <div class="dataset-table-wrap">
+    <table class="results-table dataset-table">
+      <caption class="sr-only">Camps de {{ ds.fitxer }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Camp</th>
+          <th scope="col">Tipus</th>
+          <th scope="col">Valors no nuls</th>
+          <th scope="col">Valors únics</th>
+          <th scope="col">Descripció</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for col in ds.columns %}
+        <tr>
+          <td><code>{{ col.nom }}</code></td>
+          <td>{{ col.tipus }}</td>
+          <td>{{ "{:,}".format(col.no_nuls).replace(",", ".") }}</td>
+          <td>{{ "{:,}".format(col.valors_unics).replace(",", ".") }}</td>
+          <td>{{ col.descripcio or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+
+<section class="dataset-panel" aria-labelledby="tecnologia-title">
+  <h2 id="tecnologia-title">Tecnologia del projecte</h2>
+  <div class="tech-grid">
+    {% for grup in tecnologia %}
+    <article class="tech-group">
+      <h3>{{ grup.grup }}</h3>
+      <dl>
+        {% for nom, descripcio in grup.elements %}
+        <dt>{{ nom }}</dt>
+        <dd>{{ descripcio }}</dd>
+        {% endfor %}
+      </dl>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="dataset-panel" aria-labelledby="calculs-title">
+  <h2 id="calculs-title">Càlculs realitzats</h2>
+  <dl class="calc-list">
+    {% for c in calculs %}
+    <div class="calc-list__item">
+      <dt>{{ c.nom }}</dt>
+      <dd class="calc-list__formula"><code>{{ c.formula }}</code></dd>
+      <dd>{{ c.explicacio }}</dd>
+    </div>
+    {% endfor %}
+  </dl>
+</section>
+
+{% endblock %}

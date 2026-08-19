@@ -3,10 +3,10 @@
 Different CSV than resultats_client.py (public_eleccions_meses.csv, not
 public_eleccions_partits.csv), fetched the same way: a public, read-only
 CSV on GitHub, treated as a REST endpoint via BaseApiClient.get(), cached
-in memory for a short TTL. It shares CODI_CONVOCATORIA values with the
-Resultats source but does not carry per-candidatura votes — only each
-mesa's live status (OBERTA_MESA/COMUNICADA_MESA/HORA_COMUNICADA_MESA) and
-its own vote-count checkpoints (AVAN1/2/3, nuls, blancs, total).
+in memory (see MESA_ESTAT_CACHE_TTL_SECONDS). It shares CODI_CONVOCATORIA
+values with the Resultats source but does not carry per-candidatura votes
+— only each mesa's live status (OBERTA_MESA/COMUNICADA_MESA/HORA_COMUNICADA_MESA)
+and its own vote-count checkpoints (AVAN1/2/3, nuls, blancs, total).
 
 Data quirks confirmed against the real dataset:
   * OBERTA_MESA / COMUNICADA_MESA are text "SI"/"NO" (not booleans).
@@ -15,10 +15,13 @@ Data quirks confirmed against the real dataset:
   * TOTALS_VOTS_MESA (note the plural, unlike TOTAL_VOTS_MESA in the
     Resultats CSV) already equals vots a candidatures + nuls + blancs,
     same relationship documented in resultats_client.py for AVAN3_TOTAL.
-  * These values legitimately change while the scrutiny is in progress —
-    that's the whole point of this source — so callers should keep the
-    cache TTL short (see MESA_ESTAT_CACHE_TTL_SECONDS) rather than relying
-    on force_refresh alone.
+  * These values are *meant* to change while the scrutiny is in progress —
+    that's the whole point of this source — but there is no live "seguiment
+    d'escrutini" screen yet, so MESA_ESTAT_CACHE_TTL_SECONDS is set as long
+    as the other two sources (24h) for now. TODO: once that live screen
+    exists, bring this TTL back down to a short value (it used to be 60s)
+    so the view reflects near-real-time state instead of relying on
+    force_refresh alone.
 
 Official "% escrutini" (Ministeri de l'Interior / Junta Electoral Central)
 is *not* vote-based at all: it's mesas amb l'acta ja transmesa (comunicada)
@@ -37,6 +40,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
+from ..dataset_info import describe_dataframe
 from .base_client import BaseApiClient
 
 logger = logging.getLogger(__name__)
@@ -93,6 +97,10 @@ class MesaEstatApiClient:
             return (0, f"{int(text):09d}")
         except ValueError:
             return (1, text)
+
+    def get_dataset_info(self, force_refresh: bool = False) -> dict[str, Any]:
+        """Esquema (columnes/tipus/comptatges) del CSV cru, per a l'apartat "Dades"."""
+        return describe_dataframe(self._get_dataframe(force_refresh=force_refresh))
 
     def get_convocatories(self, force_refresh: bool = False) -> list[dict[str, Any]]:
         df = self._get_dataframe(force_refresh=force_refresh)

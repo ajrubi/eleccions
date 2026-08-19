@@ -21,11 +21,22 @@
       });
     });
 
+    // El widget de xat (#chat-widget) envia el seu formulari per fetch/AJAX,
+    // no per navegació: mai "acaba de carregar" una pàgina nova que faci
+    // desaparèixer aquest overlay, així que se n'exclou explícitament —
+    // altrament es quedaria tapant tota la web per sempre (vegeu
+    // chat-widget.js, que ja mostra el seu propi indicador "Escrivint…").
     document.querySelectorAll("form").forEach(function (form) {
+      if (form.closest("#chat-widget")) {
+        return;
+      }
       form.addEventListener("submit", showLoading);
     });
 
     document.querySelectorAll(".btn--primary").forEach(function (link) {
+      if (link.closest("#chat-widget")) {
+        return;
+      }
       link.addEventListener("click", showLoading);
     });
   });

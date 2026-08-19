@@ -42,6 +42,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
+from ..dataset_info import describe_dataframe
 from .base_client import BaseApiClient
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,10 @@ class ResultatsApiClient:
     @staticmethod
     def _clean_text(value: Any) -> str:
         return value if isinstance(value, str) else ""
+
+    def get_dataset_info(self, force_refresh: bool = False) -> dict[str, Any]:
+        """Esquema (columnes/tipus/comptatges) del CSV cru, per a l'apartat "Dades"."""
+        return describe_dataframe(self._get_dataframe(force_refresh=force_refresh))
 
     # ---- high level: what the blueprints actually call ------------------
     def get_convocatories(self, force_refresh: bool = False) -> list[dict[str, Any]]:

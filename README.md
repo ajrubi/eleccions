@@ -92,11 +92,15 @@ Cada fila és l'estat d'una mesa en el moment de la consulta: si ja s'ha
 obert (`OBERTA_MESA`), si ja ha comunicat resultats — és a dir, si ja està
 escrutinada (`COMUNICADA_MESA` = `"SI"`) — i a quina hora (`HORA_COMUNICADA_MESA`),
 a més dels seus recomptes d'avanç (`AVAN1/2/3_MESA`) i el total de vots
-rebuts. Com que aquests valors **canvien mentre dura l'escrutini**,
-`mesa_client.py` cacheja aquest CSV amb un TTL molt més curt que la resta
-de fonts (`MESA_ESTAT_CACHE_TTL_SECONDS`, per defecte 60s) i la vista
-ofereix un botó "Actualitza ara" (`?refresh=1`) per forçar-ne una lectura
-immediata.
+rebuts. Aquests valors **haurien de canviar mentre dura l'escrutini**, però
+la pantalla que en faria un seguiment en viu encara no existeix: mentre no
+hi sigui, `mesa_client.py` cacheja aquest CSV amb el mateix TTL llarg que
+la resta de fonts (`MESA_ESTAT_CACHE_TTL_SECONDS`, per defecte 24h, com
+`RESULTATS_CACHE_TTL_SECONDS`/`CENS_MESA_CACHE_TTL_SECONDS`). El dia que
+s'implementi la pantalla d'escrutini en viu, aquest TTL s'haurà de tornar a
+baixar a un valor curt (p. ex. els 60s que tenia abans). La vista ja
+ofereix un botó "Actualitza ara" (`?refresh=1`) per forçar una lectura
+immediata sense esperar el TTL.
 
 **"% d'escrutini" oficial**: el Ministeri de l'Interior i la Junta
 Electoral Central el calculen com `(mesas comunicades / total de mesas) ×
@@ -132,15 +136,15 @@ El portal quedarà disponible a `http://127.0.0.1:5000/`, que redirigeix a
 |--------------------------------|-------------------------------------------------------------|-----------------------------------------------|
 | `RESULTATS_API_BASE_URL`       | (URL del CSV a GitHub)                                       | Base de la font de Resultats                  |
 | `RESULTATS_CSV_PATH`           | `public_eleccions_partits.csv`                              | Path/fitxer dins la base anterior             |
-| `RESULTATS_CACHE_TTL_SECONDS`  | `300`                                                        | TTL de la caché en memòria                    |
+| `RESULTATS_CACHE_TTL_SECONDS`  | `86400`                                                      | TTL de la caché en memòria (24h: són resultats ja publicats, no canvien) |
 | `HTTP_TIMEOUT_SECONDS`         | `10`                                                         | Timeout de les crides HTTP                    |
 | `HTTP_MAX_RETRIES`             | `3`                                                          | Reintents davant errors 5xx/429               |
 | `CENS_MESA_API_BASE_URL`       | (URL del CSV a GitHub)                                       | Base de la font de Cens agregat per mesa      |
 | `CENS_MESA_CSV_PATH`           | `public_eleccions_cens.csv`                                  | Path/fitxer dins la base anterior             |
-| `CENS_MESA_CACHE_TTL_SECONDS`  | `300`                                                        | TTL de la caché en memòria del cens per mesa  |
+| `CENS_MESA_CACHE_TTL_SECONDS`  | `86400`                                                      | TTL de la caché en memòria del cens per mesa (24h, pel mateix motiu) |
 | `MESA_ESTAT_API_BASE_URL`      | (URL del CSV a GitHub)                                       | Base de la font d'estat d'escrutini per mesa  |
 | `MESA_ESTAT_CSV_PATH`          | `public_eleccions_meses.csv`                                 | Path/fitxer dins la base anterior             |
-| `MESA_ESTAT_CACHE_TTL_SECONDS` | `60`                                                          | TTL de la caché (curt: aquestes dades canvien mentre dura l'escrutini) |
+| `MESA_ESTAT_CACHE_TTL_SECONDS` | `86400`                                                       | TTL de la caché — 24h mentre no hi hagi una pantalla d'escrutini en viu; caldrà tornar-lo a baixar a un valor curt (p. ex. 60s) quan aquesta pantalla existeixi |
 | `CENS_API_BASE_URL`            | (buit)                                                       | Reservada per a la futura cerca per DNI       |
 | `ADMIN_API_BASE_URL`           | (buit)                                                       | Reservada per a la futura API d'administració |
 | `ADMIN_API_TOKEN`              | (buit)                                                       | Reservada per al futur token d'administració  |

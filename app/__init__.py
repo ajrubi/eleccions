@@ -12,6 +12,8 @@ import logging
 from flask import Flask, redirect, request, url_for
 
 from .config import Config
+from .services.ai_chat_client import AiChatClient
+from .services.ai_digest import KnowledgeDigestBuilder
 from .services.api_clients.cens_client import CensApiClient
 from .services.api_clients.mesa_client import MesaEstatApiClient
 from .services.api_clients.resultats_client import ResultatsApiClient
@@ -55,11 +57,28 @@ def create_app(config_class: type = Config) -> Flask:
         max_retries=app.config["HTTP_MAX_RETRIES"],
     )
 
+    # Assistent IA (xat flotant, disponible a totes les pàgines — vegeu
+    # templates/base.html). El digest es construeix a partir dels mateixos
+    # RESULTATS_CLIENT/CENS_CLIENT ja creats a dalt; sense GROQ_API_KEY
+    # configurada, AiChatClient.enabled queda a False i el widget es
+    # desactiva sol (vegeu blueprints/chat/routes.py).
+    app.config["AI_DIGEST_BUILDER"] = KnowledgeDigestBuilder(
+        resultats_client=app.config["RESULTATS_CLIENT"],
+        cens_client=app.config["CENS_CLIENT"],
+    )
+    app.config["AI_CHAT_CLIENT"] = AiChatClient(
+        api_key=app.config["GROQ_API_KEY"],
+        digest_builder=app.config["AI_DIGEST_BUILDER"],
+        timeout=app.config["GROQ_TIMEOUT_SECONDS"],
+    )
+
     from .blueprints.resultats.routes import bp as resultats_bp
     from .blueprints.cens.routes import bp as cens_bp
     from .blueprints.mesa.routes import bp as mesa_bp
     from .blueprints.estadistiques.routes import bp as estadistiques_bp
     from .blueprints.prediccions.routes import bp as prediccions_bp
+    from .blueprints.dades.routes import bp as dades_bp
+    from .blueprints.chat.routes import bp as chat_bp
     from .blueprints.admin.routes import bp as admin_bp
 
     app.register_blueprint(resultats_bp)
@@ -67,6 +86,8 @@ def create_app(config_class: type = Config) -> Flask:
     app.register_blueprint(mesa_bp)
     app.register_blueprint(estadistiques_bp)
     app.register_blueprint(prediccions_bp)
+    app.register_blueprint(dades_bp)
+    app.register_blueprint(chat_bp)
     app.register_blueprint(admin_bp)
 
     @app.route("/")
@@ -97,9 +118,11 @@ def create_app(config_class: type = Config) -> Flask:
                 {"endpoint": "mesa.index", "label": "Resultats per mesa"},
                 {"endpoint": "estadistiques.index", "label": "Estadístiques comparatives"},
                 {"endpoint": "prediccions.index", "label": "Prediccions"},
+                {"endpoint": "dades.index", "label": "Dades"},
                 {"endpoint": "admin.index", "label": "Àrea privada"},
             ],
             "font_dades": font_dades_per_blueprint.get(request.blueprint),
+            "ai_chat_enabled": app.config["AI_CHAT_CLIENT"].enabled,
         }
 
     return app

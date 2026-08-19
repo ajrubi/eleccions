@@ -37,6 +37,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
+from ..dataset_info import describe_dataframe
 from .base_client import BaseApiClient
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,10 @@ class CensApiClient:
                 self._cached_at = time.monotonic()
                 logger.info("Cens CSV (re)carregat: %d files", len(self._cached_df))
             return self._cached_df
+
+    def get_dataset_info(self, force_refresh: bool = False) -> dict[str, Any]:
+        """Esquema (columnes/tipus/comptatges) del CSV cru, per a l'apartat "Dades"."""
+        return describe_dataframe(self._get_dataframe(force_refresh=force_refresh))
 
     def get_convocatories(self, force_refresh: bool = False) -> list[dict[str, Any]]:
         df = self._get_dataframe(force_refresh=force_refresh)
